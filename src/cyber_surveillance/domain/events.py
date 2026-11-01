@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -53,7 +53,7 @@ class SecurityEvent(BaseModel):
 
     event_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=160)
     event_time: datetime
-    ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ingested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     schema_version: str = "0.1"
     normalizer_version: str = "0.1"
     tenant_id: str = Field(default="default", min_length=1, max_length=128)
@@ -80,4 +80,4 @@ class SecurityEvent(BaseModel):
     def require_timezone_aware_utc(cls, value: datetime) -> datetime:
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("Timestamps must include a timezone.")
-        return value.astimezone(timezone.utc)
+        return value.astimezone(UTC)
