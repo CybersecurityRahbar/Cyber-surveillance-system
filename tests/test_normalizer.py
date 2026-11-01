@@ -1,4 +1,4 @@
-from datetime import timezone
+from datetime import UTC
 
 import pytest
 
@@ -31,7 +31,7 @@ def test_normalizes_common_ecs_like_fields_and_keeps_raw_event() -> None:
     assert event.principal == "analyst"
     assert str(event.src_ip) == "192.0.2.10"
     assert event.host == "lab-host"
-    assert event.event_time.tzinfo == timezone.utc
+    assert event.event_time.tzinfo == UTC
     assert event.raw_event == raw
 
 
