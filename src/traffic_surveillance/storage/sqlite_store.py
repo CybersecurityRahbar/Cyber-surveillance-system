@@ -1,6 +1,6 @@
+import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-import sqlite3
 from pathlib import Path
 from threading import RLock
 

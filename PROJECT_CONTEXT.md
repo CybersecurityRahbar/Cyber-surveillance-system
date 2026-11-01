@@ -735,3 +735,8 @@ Camera / RTSP / USB / Video / MJPEG → Decode & Frame Timing → Detection → 
 ### 20.2 — توحيد enum جودة التوقيت (2026-11-01)
 
 - أضيفت القيمة MEDIA_TIME_ESTIMATED إلى TimestampQuality لتطابق تصنيف OpenCV CAP_PROP_POS_MSEC واختبار منع استخدام media time التقديري كدليل سرعة صالح للإنفاذ.
+
+
+### 20.3 — إصلاح Ruff import ordering (2026-11-01)
+
+- كشف تشغيل CI على commit 5251d30f9c0ae70aa38a517528ebb8ea52ea10a8 أن Ruff توقف بسبب ترتيب import في SQLiteEventStore، بعد اجتياز تثبيت الحزمة. أُعيد ترتيب import block؛ يجب انتظار تشغيل CI الأحدث قبل اعتبار الاختبارات ناجحة.
