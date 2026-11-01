@@ -756,3 +756,70 @@ Camera / RTSP / USB / Video / MJPEG → Decode & Frame Timing → Detection → 
   وقد تم إصلاحهما، كما أُضيفت قيمة MEDIA_TIME_ESTIMATED المطلوبة لعقد التوقيت.
 - النجاح يثبت أن الحزمة قابلة للتثبيت وأن فحوص التنسيق والاختبارات المكتوبة ناجحة على Python 3.12 ضمن GitHub Actions. لا يثبت اتصال كاميرا حقيقية أو بث RTSP أو تشغيل نموذج YOLO أو قياس سرعة ميداني.
 - أصبح الفرع main في النطاق الصحيح للمشروع: Traffic & Visual Security Surveillance، وتم حذف حزمة SIEM الخاطئة بالكامل.
+
+
+---
+
+## 21. 2026-11-01 — بناء مختبر فيديو أحادي الكاميرا وتجهيز مسار البث
+
+### طلب المستخدم
+طلب المستخدم تطوير النظام ليعمل على كاميرا واحدة حتى قبل ربط كاميرات فعلية، مع قسم مستقل باسم المختبر يختبر فيديو محلياً من ملفات الجهاز، ويتيح تجربة التتبع وتعداد السيارات. كما طلب توضيح وسيلة البث الحقيقي، وشرح خطته المستقبلية لتحويل هاتف Android إلى كاميرا مراقبة تبث عبر Wi-Fi أو الإنترنت إلى النظام، مع مربعات Radar خضراء فوق المركبات، ومعرّفات تتبع، وتصنيف نوع المركبة، وقراءة اللوحة، وتحليلات مرورية واسعة.
+
+### البحث الحالي
+- YOLO26 هو أحدث عائلة معلنة في وثائق Ultralytics التي راجعناها في 1 نوفمبر 2026. نموذج YOLO26n نقطة بداية خفيفة؛ لم نفترض FPS أو دقة بدون benchmark على العتاد الفعلي.
+- Ultralytics Track Mode يعرض ByteTrack وBoT-SORT وOC-SORT وDeep OC-SORT وFastTracker وTrackTrack. ينشئ المختبر detector/tracker منفصلاً لكل job حتى لا تختلط حالات المصادر.
+- PyAV/FFmpeg يتيح PTS وtime_base؛ المختبر يقرأهما عندما يتاحان. كاميرا الخادم المحلية تستخدم arrival monotonic ولا تعتبر PTS.
+- NVIDIA DeepStream 9.2 مسار تسريع اختياري عند توفر NVIDIA hardware/software compatible، وليس شرطاً للنواة العامة.
+- MediaMTX بوابة بث تقبل WebRTC/WHIP وRTSP وSRT وRTMP وHLS وغيرها، ويمكنها تقديم المصدر لباقي النظام عبر RTSP داخلي.
+- YOLO26 COCO يصنف المركبات ولا يقرأ اللوحات؛ ANPR يتطلب plate detector متخصصاً ثم OCR محلياً وtemporal consensus.
+- Ultralytics code/weights تخضع افتراضياً إلى AGPL-3.0 أو Enterprise حسب حالات الاستخدام؛ يجب مراجعة الترخيص قبل التوزيع التجاري/المغلق.
+
+### قرار بث الهاتف
+CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي → Python/PyAV.
+- Wi-Fi: يمكن استخدام نفس البنية أو RTSP LAN للتجارب.
+- Internet: يفضل VPN خاص مثل WireGuard، أو WebRTC مع STUN/TURN وTLS ومصادقة publisher.
+- SRT بديل محتمل للشبكات المتذبذبة.
+- لا نفتح RTSP أو كاميرا الهاتف للعامة.
+- تطبيق الهاتف نفسه لم يُبنَ بعد؛ الوثيقة التفصيلية ستكون docs/PHONE_CAMERA_STREAMING.md.
+
+### الملفات التي أضيفت
+- src/traffic_surveillance/lab/jobs.py: إدارة جلسات المختبر، إيقاف job، progress والـ JPEG preview.
+- src/traffic_surveillance/lab/video_processor.py: فك فيديو عبر PyAV/FFmpeg، أو webcam خادم عبر OpenCV؛ YOLO/tracker per-job؛ مربعات خضراء، Track ID، نوع الجسم، confidence، trail، virtual line counter، preview وMP4 output.
+- src/traffic_surveillance/api/lab_routes.py: رفع ملف، بدء live RTSP/server webcam، capabilities/jobs/status/preview/video/stop endpoints.
+- src/traffic_surveillance/web/lab.html وlab.css وlab.js: واجهة مختبر عربية RTL لرفع الفيديو ومعاينته واختيار tracker/confidence/resolution/line position وعرض النتائج.
+- تحديث core/config.py لإعداد model path ومجلد lab وحد الرفع.
+- تحديث vision/ultralytics_backend.py للسماح لـ yolo26n.pt وyolo26s.pt كأسماء نماذج رسمية يتم تنزيلها عند أول تشغيل بواسطة Ultralytics؛ لا تحفظ الأوزان في Git.
+- pyproject.toml: version 0.3.0، python-multipart للرفع، extra video لـ PyAV/OpenCV، وextra vision لـ Ultralytics.
+- CI سيُحدّث لتثبيت video extra حتى تختبر عملية فك/كتابة فيديو اصطناعي.
+- إضافة اختبارات فيديو اصطناعي Fake Detector؛ لا تحتاج تنزيل YOLO weights ولا camera physical.
+
+### محتوى المختبر
+- Local video upload مع الامتدادات المعروفة وحجم رفع محدد.
+- YOLO26n مع tracker قابل للتغيير.
+- كشف فئات COCO مثل car/motorcycle/bus/truck/bicycle/person.
+- مربعات HUD خضراء ومعرّف ونوع وثقة ومسار Track.
+- عدّ unique vehicle track IDs بشكل منفصل عن line-crossing counts.
+- حفظ MP4 annotated وتخزين أحداث عبور خط المختبر في SQLite.
+- live session من RTSP/RTSPS أو server-camera:N مع مدة محددة وزر إيقاف.
+
+### حدود يجب أن تبقى واضحة
+- weights لا تُخزن في Git؛ التنزيل الأول لـ yolo26n.pt يحتاج الإنترنت.
+- المختبر لا يقرأ لوحات السيارات حتى إضافة plate detector وOCR محلي مناسب.
+- لا يحسب السرعة حالياً؛ يحتاج Calibration Studio ونقاط طريق مقاسة وتوقيتاً موثوقاً وground truth.
+- عدّ Track IDs يمكن أن يتأثر بانقطاع التتبع/ID switches، لذلك يظهر line crossing منفصلاً.
+- RTSP هنا مصدر جاهز وليس هاتفاً فعلياً؛ تطبيق Android سيُبنى لاحقاً.
+- webcam index يعني كاميرا متصلة بجهاز الخادم وليس المتصفح.
+
+### التحقق المطلوب لهذا التغيير
+- Ruff.
+- اختبارات هندسة فيديو اصطناعي: ملف MP4 قصير، Fake Detector، هوية سيارة واحدة، عبور خط واحد، JPEG preview، وملف annotated MP4.
+- اختبارات UI/API لـ /lab وcapabilities ورفض مصادر live غير RTSP/RTSPS/server-camera.
+- لا يعلن نجاح CI قبل ظهور Run مكتمل بنجاح.
+
+### الخطوات التالية
+1. تشغيل المختبر على فيديو مرور حقيقي يختاره المستخدم والتحقق بصرياً من المربعات والـ IDs والعد.
+2. benchmark CPU/GPU والذاكرة وFPS، ثم ضبط tracker/confidence/resolution.
+3. إضافة Calibration Studio وسرعة مترية بعد القياسات المرجعية.
+4. بناء plate detector + OCR يناسب اللوحات المحلية عند توفر عينات مصرح بها.
+5. اختبار MediaMTX + RTSP من OBS/FFmpeg قبل بناء Android publisher.
+6. الحفاظ على سجل تراكمي في هذا الملف مع كل طلب وقرار واختبار لاحق.

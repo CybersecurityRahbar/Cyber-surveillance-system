@@ -25,3 +25,9 @@ artifacts/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Model checkpoints and local lab videos
+models/*.pt
+models/*.onnx
+models/*.engine
+data/lab/

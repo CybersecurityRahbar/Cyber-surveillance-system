@@ -23,13 +23,14 @@
 - تخزين الأحداث يبقى بعد إعادة تشغيل التطبيق.
 - توضيح عدم وجود كاميرات متصلة في بيئة CI.
 
-## المرحلة 2 — تشغيل فيديو حقيقي (Single camera vertical slice)
-- CLI لتشغيل فيديو محلي مع أوزان يحددها المستخدم.
-- حفظ فيديو annotated ومخرجات JSONL.
-- detector + tracker + foot-point extraction.
-- اختيار إطار زمني مصدر صحيح.
-- إخراج خط سير track وعدّ line crossing.
-- قياس الأداء CPU/GPU والذاكرة.
+## المرحلة 2 — المختبر أحادي الكاميرا
+- واجهة /lab لرفع فيديو محلي أو تشغيل مصدر RTSP/كاميرا خادم.
+- YOLO26n optional + متتبعات ByteTrack/BoT-SORT/OC-SORT وغيرها.
+- Green radar boxes وTrack IDs وclass labels وtrails.
+- unique track counts وvirtual line crossing counts.
+- processed preview أثناء المعالجة وMP4 output.
+- اختبار فيديو synthetic في CI وFake detector دون أوزان حقيقية أو كاميرا فعلية.
+- الخطوة التالية: تجربة المستخدم على فيديو مرور واقعي ثم benchmark CPU/GPU/الذاكرة.
 
 ## المرحلة 3 — Calibration Studio and Traffic Analytics
 - واجهة معايرة camera-specific.
@@ -46,7 +47,11 @@
 - camera occlusion / frozen frame / tamper.
 - review workflow لتقليل false positives.
 
-## المرحلة 5 — Multi-camera orchestration
+## المرحلة 5 — تطبيق الهاتف وبوابة البث ثم Multi-camera orchestration
+- Android CameraX + MediaCodec H.264 + WebRTC/WHIP publisher.
+- MediaMTX كـ media gateway، ثم قراءة RTSP داخلياً في Python.
+- VPN/TLS ومصادقة نشر لكل stream، وعدم نشر منافذ الكاميرات للعامة.
+- بعدها إدارة عدة كاميرات ومزامنتها.
 - كاميرات RTSP/ONVIF/USB/ESP32 MJPEG وملفات.
 - process منفصل أو worker لكل stream.
 - health monitoring وreconnect/backoff.

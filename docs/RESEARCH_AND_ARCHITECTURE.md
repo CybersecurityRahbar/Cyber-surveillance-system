@@ -212,3 +212,64 @@ CENTRAL CONTROL ROOM WEB UI
 
 ### ملاحظة حول المصادر
 الوثائق تشرح إمكانات الأدوات المرجعية، والأبحاث توضح أساليب القياس. لا يعني ذلك أن دمج هذه المكونات في مشروعنا جاهز أو أن نتائجها ستنتقل مباشرة إلى كاميراتنا. سنختبر كل خوارزمية على فيديوهات ممثلة ونحتفظ بمقاييس الأخطاء والموارد قبل اعتمادها.
+
+
+---
+
+## تحديث البحث: المختبر أحادي الكاميرا وبث الهاتف
+
+### YOLO26 والمتتبعات
+وثائق Ultralytics الحالية تعرض YOLO26 كأحدث عائلة معلنة في يناير 2026. نموذج YOLO26n هو نقطة بداية صغيرة للمختبر، لكن لا نفترض FPS أو دقة قبل benchmark على CPU/GPU الفعلي.
+
+وثائق Track Mode تعرض ستة متتبعات:
+- ByteTrack: association على مرحلتين واسترجاع الصناديق منخفضة الثقة، كبداية خفيفة.
+- BoT-SORT: Kalman مع تعويض حركة الكاميرا وإمكانية ReID.
+- OC-SORT وDeep OC-SORT: observation-centric لمواجهة الحركة غير الخطية والـ occlusion.
+- FastTracker: استعادة عبر rollback عند الانسداد.
+- TrackTrack: ربط متعدد الإشارات.
+
+تستمر حالة tracker عبر الإطارات المتتابعة من المصدر نفسه؛ لذلك ينشئ المختبر detector/tracker جديداً لكل فيديو أو جلسة بث ولا يعيد استخدام حالة بين مصادر مختلفة.
+
+### DeepStream 9.2
+DeepStream Service Maker لـ Python يقدم Flow APIs لتجميع capture/inference/tracking/output، وPipeline APIs لتخصيص أعمق، ويتطلب DeepStream SDK أو Docker مدعوماً. نحتفظ به كمسار تسريع اختياري عند توفر خادم NVIDIA مناسب، وليس شرطاً للنواة العامة.
+
+### التوقيت والفيديو
+PyAV مبني على FFmpeg ويتيح الوصول إلى frame PTS وtime_base. يعتمد المختبر على PyAV لاستخراج توقيت الإطار عندما يكون موجوداً. كاميرا webcam المحلية تستخدم arrival monotonic timing ولا تعتبر PTS للمصدر.
+
+### MediaMTX لتجميع بث الهاتف والكاميرات
+MediaMTX خادم وسائط متعدد البروتوكولات:
+- WebRTC publish/read مع WHIP للنشر.
+- RTSP للكاميرات والبث الداخلي.
+- SRT للنقل المرن مع retransmission.
+- RTMP وHLS وغيرها.
+
+القرار المقترح للهاتف: WebRTC/WHIP للنشر من Android إلى MediaMTX، ثم RTSP داخلي إلى Python. عند ضعف الشبكة نختبر SRT. لا نبني تطبيق الهاتف على الاتصال الوارد المباشر للهاتف عبر الإنترنت بسبب NAT وعناوين الهاتف المتغيرة.
+
+### ANPR/OCR
+YOLO26n العام يصنف المركبات لكنه لا يقرأ اللوحات. مسار ANPR الصحيح:
+1. Vehicle detection/tracking.
+2. Plate detector متخصص، مدرب/مختبر على شكل اللوحات المحلي.
+3. تصحيح المنظور وقص اللوحة واختبار جودة الصورة.
+4. OCR يدعم الأرقام والحروف المحلية.
+5. Temporal consensus عبر عدة إطارات للمركبة نفسها.
+6. إظهار القراءة فقط إذا كانت الثقة والجودة كافيتين، وإلا إبقاء crop للمراجعة.
+
+PaddleOCR يملك إصدارات حديثة مثل PP-OCRv6، لكن النموذج العام لا يضمن القراءة الصحيحة لنمط اللوحة المحلي دون تهيئة وتقييم.
+
+### الترخيص
+Ultralytics تنص على أن الشيفرة والأوزان تقع افتراضياً تحت AGPL-3.0، وأن الاستخدامات التي لا تريد الالتزام بشروطها قد تحتاج Enterprise License. يجب مراجعة الشروط قبل توزيع المنتج أو استخدامه تجارياً.
+
+### مصادر إضافية
+- YOLO26 models: https://docs.ultralytics.com/models/yolo26
+- Ultralytics tracking: https://docs.ultralytics.com/modes/track/
+- Ultralytics license: https://www.ultralytics.com/license
+- DeepStream Service Maker Python: https://docs.nvidia.com/metropolis/deepstream/9.2/text/DS_service_maker_python
+- MediaMTX introduction: https://mediamtx.org/docs/kickoff/introduction
+- MediaMTX publish/read protocols: https://mediamtx.org/docs/features/publish-and-read
+- MediaMTX WebRTC publisher/WHIP: https://mediamtx.org/docs/publish/webrtc
+- MediaMTX SRT: https://mediamtx.org/docs/publish/srt
+- MediaMTX ICE/STUN/TURN: https://mediamtx.org/docs/features/webrtc-specific-features
+- PyAV time and frame PTS: https://pyav.basswood.io/docs/stable/api/time.html
+- OpenCV video I/O properties: https://docs.opencv.org/4.12.0/d4/d15/group__videoio__flags__base.html
+- Milestone XProtect 2026r1 views and video wall: https://doc.milestonesys.com/xprotect/xprotect-smart-client/2026r1/en/content-in-view-items
+- PaddleOCR PP-OCRv6: https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv6/PP-OCRv6.en.md
