@@ -974,3 +974,25 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - قد يأخذ تثبيت PyTorch وقتاً ويستهلك مساحة بسبب حجمه؛ تنزيل أوزان YOLO26 يأتي لاحقاً عند أول عملية تحليل، ويحتاج إنترنت.
 - عنوان الواجهة على نفس الجهاز: http://127.0.0.1:8000/lab. يجب إبقاء الطرفية مفتوحة أثناء الاستخدام.
 - لم يثبت بعد أن تثبيت Kali أو تشغيله نجح على جهاز المستخدم؛ هذه تعليمات فقط تنتظر تجربة المستخدم.
+
+
+### 21.11 — توضيح PyTorch وحجمه والفرق عن LiteRT في Android (2026-11-02)
+
+- سأل المستخدم قبل التثبيت: ما حجم PyTorch، هل هو ضروري، ولماذا لم يستخدم في تطبيق Android السابق.
+- تم فحص الشيفرة الحالية:
+  - `pyproject.toml` يضع `ultralytics>=8.4.63,<9` داخل extra باسم vision الاختياري.
+  - `src/traffic_surveillance/vision/ultralytics_backend.py` يستورد `from ultralytics import YOLO` وينفذ `.track(... persist=True ...)`.
+  - Ultralytics يعلن torch وtorchvision كاعتماديتين أساسيتين، لذا تثبيت backend الحالي يجلب PyTorch تلقائياً.
+- حجم ملفات PyTorch المرصود لمراجع Linux x86_64 / Python 3.12 بتاريخ 2026-11-02:
+  - ملف CPU-only torch 2.15.0 من فهرس PyTorch: 209,530,490 bytes، نحو 209.5 MB تنزيل.
+  - ملف PyPI الافتراضي torch 2.15.0 cp312 manylinux x86_64: 539.2 MB تنزيل. إصدار PyTorch 2.15 يجعل CUDA 13.2 هو الـ default wheel بحسب إعلان الإصدار؛ لذلك يجب عدم استخدام الحجم الافتراضي وكأنه CPU-only.
+  - هذه أحجام wheels للتنزيل فقط، وليست قياس المساحة النهائية بعد الفك أو مجموع كل الاعتماديات مثل torchvision وغيرها.
+- السبب في عدم استخدام PyTorch داخل تطبيق Android السابق:
+  - Android Gradle يعتمد `com.google.ai.edge.litert:litert:2.1.5` ويضم نموذج `yolo26n.tflite` داخل assets، وكان مسار الاستدلال الأصلي يعمل عبر LiteRT/TFLite runtime على الجهاز.
+  - LiteRT runtime يشغل النموذج المُصدّر `.tflite` مباشرة على CPU/GPU؛ لا يحتاج إلى PyTorch داخل APK. PyTorch إطار عمل مختلف يُستخدم كثيراً للتدريب/التحويل أو استدلال Python على الخادم.
+  - أدوات Python البحثية في المستودع السابق منفصلة عن تطبيق Android نفسه وقد تستخدم Ultralytics/PyTorch، فلا تخلط اعتماديات أداة البحث مع اعتماديات APK.
+- التفريق التشغيلي:
+  - واجهة النظام وFastAPI ومعالجة الفيديو الأساسية يمكن تجهيزها دون extra الرؤية (بحسب المكونات المطلوبة).
+  - كشف YOLO الفعلي في النسخة الحالية يستخدم UltralyticsTrackingBackend، ولذلك يحتاج حاليًا إلى Ultralytics واعتمادياته، ومنها PyTorch وTorchvision.
+  - هذا ليس قيداً حتمياً على معمارية المنصة: يمكن بناء backend مستقل ONNX Runtime أو OpenVINO لتشغيل نموذج مُصدّر دون PyTorch على جهاز الإنتاج، مع ضرورة تنفيذ preprocessing/postprocessing والتتبع واختبار التوافق والدقة والأداء. توثيق Ultralytics الحالي يدعم تصدير YOLO26 إلى ONNX، كما أن wheel ONNX Runtime CPU لـ Linux x86_64 / Python 3.12 حجمه 23.8 MB في الإصدار 1.31.1؛ حجم runtime وحده لا يعادل حجم النموذج أو بقية النظام.
+- لم يتخذ المستخدم بعد قراراً بتغيير backend، ولم يتم تعديل الكود أو الاعتماديات في هذه المرحلة. ينبغي عدم مطالبته بتثبيت PyTorch قبل عرض الخيارين وأخذ قراره حول تفضيل سرعة البدء الحالية أم تقليل الحجم عبر backend مستقل.
