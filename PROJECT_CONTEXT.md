@@ -942,3 +942,35 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - التشخيص الأرجح: أنشئت البيئة بإصدار Python غير مدعوم (3.11) لأن `py -3.12` غير متاح ولأن عجلات الحزم CPython 3.11؛ هذا مع نطاق Ultralytics الواسع جعل الحل بطيئاً. لا نصف السبب بأنه سرعة الإنترنت وحدها.
 - توصية الدعم للمستخدم: إيقاف resolver الحالي بـ Ctrl+C؛ تثبيت Python 3.12 ثم حذف البيئة الافتراضية القديمة وإعادة إنشائها صراحةً من Python 3.12؛ تأكيد `python --version` داخل البيئة قبل تثبيت الحزم. بعد ذلك، لتقليل إعادة حل نسخ أدوات التطوير غير اللازمة على جهاز التشغيل، تثبيت `.[video]` أولاً ثم إصدار Ultralytics ثابت محدد مثل 8.4.197 بعد التأكد من أنه متوافق مع المشروع، بدلاً من تثبيت dev extra على جهاز المستخدم. هذا اقتراح إجرائي للمساعدة ولم يغيّر قيود الاعتماديات في pyproject.toml بعد.
 - لم يتم تشغيل النظام أو اختبار YOLO على جهاز المستخدم حتى الآن. يجب طلب نتيجة نسخة Python وأي خطأ بعد إعادة التثبيت، وعدم الادعاء بأن العملية اكتملت.
+
+
+### 21.10 — تعليمات تثبيت وتشغيل Kali Linux باستخدام Python 3.12 (2026-11-02)
+
+- المستخدم يريد تجربة منصة Cyber-surveillance-system على Kali Linux ويذكر أن Python 3.12 متوفر.
+- أوامر Linux تختلف عن Windows: استخدم `python3.12` بدلاً من `py -3.12`، وفعّل البيئة بـ `source .venv/bin/activate`.
+- التثبيت يجب أن يتم داخل virtual environment وعدم استخدام `sudo pip` أو `pip install --break-system-packages`؛ Kali تعتمد externally-managed Python (PEP 668) وتوصي بعزل حزم المشروع في venv.
+- أوامر مقترحة:
+  ```bash
+  sudo apt update
+  sudo apt install -y git ffmpeg build-essential pkg-config python3.12-venv
+
+  python3.12 --version
+  git clone https://github.com/CybersecurityRahbar/Cyber-surveillance-system.git
+  cd Cyber-surveillance-system
+
+  python3.12 -m venv .venv
+  source .venv/bin/activate
+  python --version
+  python -m pip install --upgrade pip setuptools wheel
+  python -m pip install -e ".[video]"
+  python -m pip install "ultralytics==8.4.197"
+
+  python -c "import fastapi, av, cv2, ultralytics, torch; print('Imports OK')"
+  python -m uvicorn traffic_surveillance.api.app:app --reload --host 127.0.0.1 --port 8000
+  ```
+- إذا لم تتوفر حزمة python3.12-venv في مستودعات النظام، تحقق من طريقة تثبيت Python 3.12 نفسها؛ قد تكون نسخة غير مدارة بواسطة APT. وثائق Kali العامة توصي بحزمة python3-full/venv للنظام، لكن يجب ألا يُستخدم مفسر مختلف عن 3.12 الذي قصده المستخدم.
+- لا تثبت dev extra على جهاز التشغيل؛ اختبارات ruff/pytest ليست مطلوبة لتشغيل المختبر. تثبيت Ultralytics بإصدار محدد يقلل مساحة backtracking مقارنة بمجال الإصدار الواسع.
+- لا تستخدم sudo pip أو --break-system-packages. هذا إجراء لحماية Python الخاص بالنظام وتجنب كسر أدوات Kali.
+- قد يأخذ تثبيت PyTorch وقتاً ويستهلك مساحة بسبب حجمه؛ تنزيل أوزان YOLO26 يأتي لاحقاً عند أول عملية تحليل، ويحتاج إنترنت.
+- عنوان الواجهة على نفس الجهاز: http://127.0.0.1:8000/lab. يجب إبقاء الطرفية مفتوحة أثناء الاستخدام.
+- لم يثبت بعد أن تثبيت Kali أو تشغيله نجح على جهاز المستخدم؛ هذه تعليمات فقط تنتظر تجربة المستخدم.
