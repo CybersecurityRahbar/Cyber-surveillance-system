@@ -867,3 +867,14 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
   - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41349079472
 - تم التحقق من شجرة main ووجود ملف المختبر وملف بث الهاتف وPROJECT_CONTEXT.md.
 - حالة التسليم الحالية: المختبر أحادي الكاميرا موجود ومختبر آلياً بفيديو اصطناعي؛ لم يتم تشغيل أوزان YOLO الحقيقية أو فيديو مرور المستخدم أو RTSP/كاميرا فعلية في هذه الجلسة. يلزم ذلك في تجربة المستخدم التالية.
+
+
+### 21.5 — إعادة تأكيد CI على آخر رأس للفرع (2026-11-01)
+
+- Run ID: 41349134765
+- Commit المختبر: 0f03dbebeced6428f869ffcf20e7227e5508de64
+- الحالة: completed / success
+- Ruff: success.
+- Unit and API tests: success — 11 passed, 1 Starlette TestClient deprecation warning.
+- التغطية الإجمالية التي ظهرت في التقرير: 67%؛ مسارات تحميل YOLO وRTSP الحقيقية غير مغطاة بالاختبار الآلي لأنها تحتاج نموذج/مصدر خارجي.
+- الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41349134765
