@@ -32,7 +32,9 @@ class SpeedEstimator:
         self.projector = projector
         self.calibration_verified = calibration_verified
         self.max_gap_seconds = max_gap_seconds
-        self._previous: dict[int, tuple[float, float, float]] = {}
+        self._previous: dict[
+            int, tuple[float, float, float, TimestampQuality]
+        ] = {}
         self._speeds: dict[int, deque[float]] = defaultdict(
             lambda: deque(maxlen=median_window)
         )
@@ -45,7 +47,7 @@ class SpeedEstimator:
         timestamp_quality: TimestampQuality,
     ) -> SpeedMeasurement | None:
         ground = self.projector.project(image_point)
-        current = (timestamp_seconds, ground.x_m, ground.y_m)
+        current = (timestamp_seconds, ground.x_m, ground.y_m, timestamp_quality)
         previous = self._previous.get(track_id)
         self._previous[track_id] = current
 
@@ -70,6 +72,7 @@ class SpeedEstimator:
         valid = (
             self.calibration_verified
             and timestamp_quality == TimestampQuality.SOURCE_PTS
+            and previous[3] == TimestampQuality.SOURCE_PTS
         )
         return SpeedMeasurement(
             track_id=track_id,

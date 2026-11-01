@@ -19,7 +19,11 @@ def test_directed_line_counter_counts_crossing_segment() -> None:
     crossing = counter.update(1, (5, 2))
     assert crossing is not None
     assert crossing.direction == "negative_to_positive"
+    assert crossing.intersection == (5.0, 0.0)
     assert counter.update(1, (5, 3)) is None
+    reverse = counter.update(1, (5, -3))
+    assert reverse is not None
+    assert reverse.direction == "positive_to_negative"
 
 
 def test_restricted_zone_entry_and_loitering() -> None:

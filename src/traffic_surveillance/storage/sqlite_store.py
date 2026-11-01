@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 import sqlite3
 from pathlib import Path
 from threading import RLock
@@ -12,7 +14,7 @@ class SQLiteEventStore:
         self.path = Path(database_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute(
                 """
@@ -39,14 +41,22 @@ class SQLiteEventStore:
                 """
             )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=10)
         connection.row_factory = sqlite3.Row
-        return connection
+        try:
+            yield connection
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def add_event(self, event: SurveillanceEvent) -> bool:
         payload = event.model_dump_json()
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO surveillance_events
@@ -81,12 +91,12 @@ class SQLiteEventStore:
         query += " ORDER BY occurred_at DESC LIMIT ?"
         parameters += (limit,)
 
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             rows = connection.execute(query, parameters).fetchall()
         return [SurveillanceEvent.model_validate_json(row["payload_json"]) for row in rows]
 
     def count_events(self) -> int:
-        with self._lock, self._connect() as connection:
+        with self._lock, self._connection() as connection:
             row = connection.execute(
                 "SELECT COUNT(*) AS event_count FROM surveillance_events"
             ).fetchone()

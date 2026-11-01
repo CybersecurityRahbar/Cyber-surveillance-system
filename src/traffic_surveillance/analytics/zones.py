@@ -77,7 +77,9 @@ class ZoneMonitor:
                 severity=Severity.MEDIUM,
                 occurred_at=occurred_at,
                 title=f"Loitering in zone: {self.zone.name}",
-                description="A tracked object remained inside the zone beyond its configured duration.",
+                description=(
+                    "A tracked object remained inside the zone beyond its configured duration."
+                ),
                 track_id=track_id,
                 evidence={
                     "zone_id": self.zone.zone_id,

@@ -17,8 +17,9 @@ class FramePacket:
 class OpenCVFrameSource:
     """Read a local video, webcam or RTSP stream through OpenCV.
 
-    Local video uses media position as its timestamp. Live streams use arrival
-    monotonic time conservatively and are not suitable for enforcement-grade speed.
+    OpenCV's media-position value is marked estimated, not as exact source PTS.
+    Live streams use arrival monotonic time. Neither timestamp type is by itself
+    accepted for enforcement-grade speed calculations.
     """
 
     def __init__(self, camera_id: str, source: str | int) -> None:
@@ -51,7 +52,7 @@ class OpenCVFrameSource:
                     ("rtsp://", "rtsps://", "http://", "https://")
                 ):
                     timestamp = max(0.0, capture.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
-                    quality = TimestampQuality.SOURCE_PTS
+                    quality = TimestampQuality.MEDIA_TIME_ESTIMATED
                 else:
                     timestamp = time.monotonic()
                     quality = TimestampQuality.ARRIVAL_MONOTONIC

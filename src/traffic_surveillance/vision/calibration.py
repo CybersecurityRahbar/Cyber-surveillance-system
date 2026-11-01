@@ -37,10 +37,13 @@ class HomographyProjector:
         image_points: list[tuple[float, float]],
         ground_points_m: list[tuple[float, float]],
         *,
-        reprojection_threshold_px: float = 3.0,
+        reprojection_threshold_m: float = 0.25,
     ) -> tuple["HomographyProjector", list[bool]]:
+        """Fit pixel-to-ground homography; RANSAC threshold is measured in ground units."""
         if len(image_points) != len(ground_points_m) or len(image_points) < 4:
             raise ValueError("At least four paired image/ground points are required.")
+        if reprojection_threshold_m <= 0:
+            raise ValueError("reprojection_threshold_m must be positive.")
         try:
             import cv2
         except ImportError as exc:
@@ -54,7 +57,7 @@ class HomographyProjector:
             source,
             destination,
             method=cv2.RANSAC,
-            ransacReprojThreshold=reprojection_threshold_px,
+            ransacReprojThreshold=reprojection_threshold_m,
         )
         if matrix is None or mask is None:
             raise ValueError("Could not estimate a valid homography from these points.")

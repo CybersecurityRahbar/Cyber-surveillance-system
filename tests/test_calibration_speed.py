@@ -29,8 +29,8 @@ def test_speed_requires_verified_calibration_and_source_pts() -> None:
     assert measurement.speed_kmh == pytest.approx(36.0)
     assert measurement.valid_for_enforcement
 
-    untrusted = SpeedEstimator(projector, calibration_verified=True)
-    untrusted.update(8, (0, 0), 0.0, TimestampQuality.ARRIVAL_MONOTONIC)
-    measurement = untrusted.update(8, (10, 0), 1.0, TimestampQuality.ARRIVAL_MONOTONIC)
+    estimated_time = SpeedEstimator(projector, calibration_verified=True)
+    estimated_time.update(8, (0, 0), 0.0, TimestampQuality.MEDIA_TIME_ESTIMATED)
+    measurement = estimated_time.update(8, (10, 0), 1.0, TimestampQuality.MEDIA_TIME_ESTIMATED)
     assert measurement is not None
     assert not measurement.valid_for_enforcement
