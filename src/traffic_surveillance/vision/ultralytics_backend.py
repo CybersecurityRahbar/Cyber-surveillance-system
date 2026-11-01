@@ -4,11 +4,9 @@ from traffic_surveillance.domain.models import BoundingBox, Detection
 
 
 class UltralyticsTrackingBackend:
-    """Optional YOLO detector/tracker adapter; create one instance per camera stream.
+    """Optional YOLO detector/tracker adapter; use one instance per video stream."""
 
-    Ultralytics is optional because model/runtime footprint and licensing must be
-    evaluated for the deployment environment before distribution.
-    """
+    DOWNLOADABLE_MODELS = {"yolo26n.pt", "yolo26s.pt"}
 
     def __init__(
         self,
@@ -22,13 +20,18 @@ class UltralyticsTrackingBackend:
             from ultralytics import YOLO
         except ImportError as exc:
             raise RuntimeError(
-                "Ultralytics is not installed. Install the optional 'vision' extra."
+                "Ultralytics is not installed. Install with: "
+                "pip install -e '.[video,vision]'"
             ) from exc
 
         path = Path(weights)
-        if not path.is_file():
-            raise FileNotFoundError(f"Model weights not found: {path}")
-        self._model = YOLO(str(path))
+        model_source = str(path)
+        if not path.is_file() and model_source not in self.DOWNLOADABLE_MODELS:
+            raise FileNotFoundError(
+                f"Model weights not found: {path}. Use yolo26n.pt or provide a local model path."
+            )
+
+        self._model = YOLO(model_source)
         self._tracker = tracker
         self._confidence = confidence
         self._device = device

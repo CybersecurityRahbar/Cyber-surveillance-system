@@ -1,0 +1,1 @@
+"""Single-camera video laboratory."""

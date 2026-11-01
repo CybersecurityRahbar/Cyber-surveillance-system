@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535)
     database: str = "data/surveillance.sqlite3"
     api_key: str | None = None
+    lab_storage_dir: str = "data/lab"
+    model_path: str = "yolo26n.pt"
+    max_upload_mb: int = Field(default=1024, ge=10, le=4096)
 
     @model_validator(mode="after")
     def require_api_key_for_remote_bind(self) -> "Settings":
