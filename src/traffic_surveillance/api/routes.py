@@ -1,3 +1,5 @@
+from importlib.util import find_spec
+
 from fastapi import APIRouter, Depends, Query, Request
 
 from traffic_surveillance.api.auth import require_api_key
@@ -31,11 +33,12 @@ async def create_event(event: SurveillanceEvent, request: Request) -> Surveillan
 @router.get("/status")
 async def status(request: Request) -> dict[str, object]:
     store: SQLiteEventStore = request.app.state.event_store
+    processing_ready = all(find_spec(name) is not None for name in ("av", "cv2", "ultralytics"))
     return {
         "service": "traffic-and-visual-security-surveillance",
         "environment": request.app.state.settings.environment,
         "storage": "sqlite",
         "events_stored": store.count_events(),
-        "video_processing_ready": True,
+        "video_processing_ready": processing_ready,
         "camera_fleet_connected": False,
     }

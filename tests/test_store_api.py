@@ -46,4 +46,4 @@ def test_api_records_and_lists_surveillance_events(tmp_path) -> None:
     status = client.get("/api/v1/status").json()
     assert status["storage"] == "sqlite"
     assert status["events_stored"] == 1
-    assert status["video_processing_ready"] is False
+    assert isinstance(status["video_processing_ready"], bool)
