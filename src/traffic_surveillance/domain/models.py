@@ -38,6 +38,7 @@ class Severity(StrEnum):
 
 class TimestampQuality(StrEnum):
     SOURCE_PTS = "source_pts"
+    MEDIA_TIME_ESTIMATED = "media_time_estimated"
     ARRIVAL_MONOTONIC = "arrival_monotonic"
     UNKNOWN = "unknown"
 

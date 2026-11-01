@@ -730,3 +730,8 @@ Camera / RTSP / USB / Video / MJPEG → Decode & Frame Timing → Detection → 
 - تم تصحيح وصف RANSAC في Homography: عتبة إعادة الإسقاط هنا بوحدة مستوى الأرض/الأمتار لأن الوجهة هي إحداثيات المتر؛ سميت الوسيطة reprojection_threshold_m.
 - تم إصلاح إغلاق اتصالات SQLite صراحة عبر context manager يلتزم أو يتراجع ويغلق الاتصال دائماً.
 - لم تتم بعد إعادة تأكيد نجاح CI بعد هذه التعديلات، ولا يوجد اختبار ميداني لكاميرا فعلية أو دقة السرعة.
+
+
+### 20.2 — توحيد enum جودة التوقيت (2026-11-01)
+
+- أضيفت القيمة MEDIA_TIME_ESTIMATED إلى TimestampQuality لتطابق تصنيف OpenCV CAP_PROP_POS_MSEC واختبار منع استخدام media time التقديري كدليل سرعة صالح للإنفاذ.
