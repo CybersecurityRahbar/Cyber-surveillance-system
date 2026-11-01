@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cyber_surveillance.detection.rules import AuthenticationFailureBurstRule
 from cyber_surveillance.domain.events import (
@@ -27,7 +27,7 @@ def make_event(index: int, when: datetime) -> SecurityEvent:
 
 def test_detects_failure_burst_once_and_resets_after_window_expires() -> None:
     rule = AuthenticationFailureBurstRule(threshold=3, window_seconds=60)
-    start = datetime(2026, 11, 1, 10, 0, tzinfo=timezone.utc)
+    start = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
 
     assert rule.evaluate(make_event(1, start)) is None
     assert rule.evaluate(make_event(2, start + timedelta(seconds=5))) is None
