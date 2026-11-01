@@ -854,3 +854,16 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - التحقق لا يشمل YOLO weights الحقيقية أو كاميرا فعلية أو اختبار RTSP حقيقي أو دقة التصنيف على فيديو طريق واقعي؛ CI لم يثبت Ultralytics لتجنب تنزيل الأوزان.
 - تحذير Starlette TestClient يشير إلى deprecation لاستخدام httpx القديم وقد يحتاج تحديثاً لاحقاً بعد التحقق من توافق httpx2 مع Starlette/FastAPI؛ لم نضف حزمة تجريبية لمجرد إسكات التحذير.
 - أضيفت وثيقة docs/PHONE_CAMERA_STREAMING.md لتفصيل معمارية Android CameraX + MediaCodec + WebRTC/WHIP + MediaMTX + RTSP إلى محرك Python، وسياسات VPN/TLS/STUN/TURN، والاختبار باستخدام OBS/FFmpeg قبل بناء تطبيق الهاتف.
+
+
+### 21.4 — التحقق من رأس main بعد اكتمال التوثيق (2026-11-01)
+
+- بعد إضافة docs/PHONE_CAMERA_STREAMING.md وسجل النتائج، أُطلق CI على آخر commit في main:
+  - Run ID: 41349079472
+  - Commit: ce8bc401cc1ae3f38f5c6c348eb033ea68174c14
+  - الحالة النهائية: completed / success
+  - Ruff: success
+  - Unit and API tests: success، 11 passed
+  - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41349079472
+- تم التحقق من شجرة main ووجود ملف المختبر وملف بث الهاتف وPROJECT_CONTEXT.md.
+- حالة التسليم الحالية: المختبر أحادي الكاميرا موجود ومختبر آلياً بفيديو اصطناعي؛ لم يتم تشغيل أوزان YOLO الحقيقية أو فيديو مرور المستخدم أو RTSP/كاميرا فعلية في هذه الجلسة. يلزم ذلك في تجربة المستخدم التالية.
