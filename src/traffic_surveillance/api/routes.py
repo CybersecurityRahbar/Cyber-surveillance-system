@@ -36,6 +36,6 @@ async def status(request: Request) -> dict[str, object]:
         "environment": request.app.state.settings.environment,
         "storage": "sqlite",
         "events_stored": store.count_events(),
-        "video_processing_ready": False,
+        "video_processing_ready": True,
         "camera_fleet_connected": False,
     }
