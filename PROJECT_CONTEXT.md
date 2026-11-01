@@ -840,3 +840,17 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - الاختبار المتبقي فشل لأن test_store_api القديم كان يتوقع أن video_processing_ready ثابتة False، بينما تغيرت بعد إضافة المختبر إلى True.
 - أصلحت API status لتتحقق ديناميكياً من توفر PyAV وOpenCV وUltralytics، وعدلت الاختبار ليتحقق من نوع القيمة بدلاً من افتراض جاهزية/غياب الحزم.
 - لا يعتبر CI ناجحاً حتى ينتهي التشغيل التالي بنجاح.
+
+
+### 21.3 — نجاح CI النهائي للمختبر (2026-11-01)
+
+- GitHub Actions Run ID: 41348983341
+- Commit المختبر: e0c09ba028285a0c14fdd7f9d2f00794eddc7947
+- الحالة النهائية: completed / success.
+- نجح تثبيت الحزمة وRuff وكل اختبارات Pytest.
+- النتيجة: 11 passed، تحذير deprecation واحد من Starlette TestClient/httpx، لا يوجد فشل اختبار.
+- الاختبار المحوري: tests/test_video_lab.py أنشأ فيديو MP4 اصطناعياً من 10 إطارات، مرر الإطارات عبر Fake Detector، أكد unique vehicle track واحداً، عبور خط باتجاه down مرة واحدة، preview JPEG وannotated MP4.
+- رابط التشغيل: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41348983341
+- التحقق لا يشمل YOLO weights الحقيقية أو كاميرا فعلية أو اختبار RTSP حقيقي أو دقة التصنيف على فيديو طريق واقعي؛ CI لم يثبت Ultralytics لتجنب تنزيل الأوزان.
+- تحذير Starlette TestClient يشير إلى deprecation لاستخدام httpx القديم وقد يحتاج تحديثاً لاحقاً بعد التحقق من توافق httpx2 مع Starlette/FastAPI؛ لم نضف حزمة تجريبية لمجرد إسكات التحذير.
+- أضيفت وثيقة docs/PHONE_CAMERA_STREAMING.md لتفصيل معمارية Android CameraX + MediaCodec + WebRTC/WHIP + MediaMTX + RTSP إلى محرك Python، وسياسات VPN/TLS/STUN/TURN، والاختبار باستخدام OBS/FFmpeg قبل بناء تطبيق الهاتف.
