@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from cyber_surveillance.domain.events import (
@@ -37,14 +37,14 @@ def _as_text(value: Any) -> str | None:
 
 def _parse_time(value: Any) -> datetime:
     if value is None:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     if isinstance(value, datetime):
         parsed = value
     elif isinstance(value, (int, float)):
         timestamp = float(value)
         if timestamp > 100_000_000_000:
             timestamp /= 1000.0
-        parsed = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        parsed = datetime.fromtimestamp(timestamp, tz=UTC)
     elif isinstance(value, str):
         candidate = value.strip()
         if candidate.endswith("Z"):
@@ -55,7 +55,7 @@ def _parse_time(value: Any) -> datetime:
 
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("Event timestamp must include a timezone.")
-    return parsed.astimezone(timezone.utc)
+    return parsed.astimezone(UTC)
 
 
 def _source(value: Any) -> EventSource:
