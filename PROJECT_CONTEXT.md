@@ -740,3 +740,19 @@ Camera / RTSP / USB / Video / MJPEG → Decode & Frame Timing → Detection → 
 ### 20.3 — إصلاح Ruff import ordering (2026-11-01)
 
 - كشف تشغيل CI على commit 5251d30f9c0ae70aa38a517528ebb8ea52ea10a8 أن Ruff توقف بسبب ترتيب import في SQLiteEventStore، بعد اجتياز تثبيت الحزمة. أُعيد ترتيب import block؛ يجب انتظار تشغيل CI الأحدث قبل اعتبار الاختبارات ناجحة.
+
+
+### 20.4 — نتيجة التحقق النهائية للتصحيح (2026-11-01)
+
+- GitHub Actions Run رقم 6 من بداية هذه المحاولة المصححة:
+  - Run ID: 41346461238
+  - Commit المختبر: 7ed22b0df8baffb0a6dc472e6acb4f0ef805cd5f
+  - الحالة: completed / success.
+  - جميع الخطوات ناجحة: تثبيت الحزمة، Ruff، Unit and API tests.
+  - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41346461238
+- الإخفاقات السابقة في CI كانت:
+  1. سطر طويل في وصف Loitering.
+  2. ترتيب imports في SQLiteEventStore.
+  وقد تم إصلاحهما، كما أُضيفت قيمة MEDIA_TIME_ESTIMATED المطلوبة لعقد التوقيت.
+- النجاح يثبت أن الحزمة قابلة للتثبيت وأن فحوص التنسيق والاختبارات المكتوبة ناجحة على Python 3.12 ضمن GitHub Actions. لا يثبت اتصال كاميرا حقيقية أو بث RTSP أو تشغيل نموذج YOLO أو قياس سرعة ميداني.
+- أصبح الفرع main في النطاق الصحيح للمشروع: Traffic & Visual Security Surveillance، وتم حذف حزمة SIEM الخاطئة بالكامل.
