@@ -1,12 +1,12 @@
 import uvicorn
 
-from cyber_surveillance.core.config import get_settings
+from traffic_surveillance.core.config import get_settings
 
 
 def run() -> None:
     settings = get_settings()
     uvicorn.run(
-        "cyber_surveillance.api.app:app",
+        "traffic_surveillance.api.app:app",
         host=settings.host,
         port=settings.port,
         reload=settings.environment == "development",

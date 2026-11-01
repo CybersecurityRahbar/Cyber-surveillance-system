@@ -33,4 +33,4 @@ jobs:
         run: ruff check src tests
 
       - name: Unit and API tests
-        run: pytest --cov=cyber_surveillance --cov-report=term-missing
+        run: pytest --cov=traffic_surveillance --cov-report=term-missing

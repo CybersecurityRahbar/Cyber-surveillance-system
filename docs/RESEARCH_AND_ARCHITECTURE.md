@@ -1,292 +1,214 @@
-# بحث الأنظمة المرجعية والمعمارية المقترحة
+# البحث المرجعي: أنظمة المراقبة المرورية والأمنية بالفيديو
 
-**تاريخ البحث:** 2026-11-01  
-**النطاق المفترض:** منصة مراقبة أمنية دفاعية (SIEM / XDR / SOC) للأصول والشبكات والخدمات التي نملكها أو لدينا تصريح بمراقبتها.  
-**ملاحظة:** البحث يدرس المعمارية والواجهات والقدرات المنشورة في الوثائق الرسمية، ولا يدّعي تنفيذ كل تلك المنتجات أو إجراء اختبار أداء مقارن بينها.
+**تاريخ المراجعة:** 1 نوفمبر 2026  
+**النطاق:** Intelligent Transportation Systems (ITS)، Video Management Systems (VMS)، Intelligent Video Analytics (IVA)، Multi-Camera Tracking.
 
----
+## 1. التصحيح الأساسي لنطاق المنتج
 
-## 1. خلاصة البحث
+المشروع ليس SIEM ولا Endpoint Protection. إنه نظام مركزي لتحليل الفيديو من كاميرات الطرق والمنشآت، واكتشاف الحركة والأحداث المرورية والأمنية المرئية، وتقديمها للمشغل في مركز تحكم.
 
-المنصات المركزية القوية لا تعتمد على كاشف واحد. قوتها تأتي من سلسلة كاملة:
+## 2. الأنظمة والمنصات المرجعية
 
-1. جمع أحداث متعددة المصادر، مع موثوقية النقل ومراقبة صحة المجمعات.
-2. تطبيع الحقول إلى مخطط مشترك حتى يمكن مقارنة منتجات مختلفة.
-3. إثراء الحدث بسياق الأصل والحساب والتهديد والثغرة والوقت.
-4. كشف توقيعات وقواعد وسلوكيات داخل نافذة زمنية.
-5. ربط نتائج متعددة لتشكيل قصة أو تسلسل هجوم قابل للتفسير.
-6. إدارة التنبيه كحالة عمل: إقرار، تعيين، تصعيد، تحقيق، أدلة، إغلاق.
-7. قياس جودة الكشف، والضجيج، وفجوات الرؤية، واستهلاك الموارد.
-8. الاحتفاظ بالأثر الخام مع نسخة مطبّعة حتى يمكن إعادة التحليل لاحقاً.
-
-لهذا السبب لن يكون المشروع مجرد مجموعة سكربتات Python أو صفحة تعرض عدادات. سيكون منصة ذات عقود بيانات واضحة ومحركات مستقلة وواجهات تشغيل وتحقيق.
-
-## 2. الأنظمة المرجعية التي تمت دراستها
-
-| النظام | الفكرة التي نتعلم منها | دور محتمل في نظامنا |
+| النظام | الدور | ما نستفيده |
 |---|---|---|
-| Wazuh | فصل Agent وManager وIndexer وDashboard، مع تطبيع وإثراء وقواعد وإدارة Agents | مرجع لطبقة Endpoint والحوكمة والصحة والتقارير |
-| Security Onion | جمع Network Visibility وHost Visibility وIDS وPCAP وThreat Hunting وCase Management في منصة تشغيلية | مرجع لتوحيد مشاهدات الشبكة والمضيف والتحقيق |
-| Zeek | تحليل بروتوكولي عالي المستوى وحالة تدفق مستمرة وسجلات قابلة للتخصيص | مصدر غني لسياق الاتصالات وDNS وHTTP وTLS |
-| Suricata | IDS/IPS وتحليل بروتوكولات، مع مخرجات EVE JSON منظمة تشمل التنبيهات والتدفقات وDNS وHTTP وTLS والإحصاءات | مصدر إشارات كشف الشبكة |
-| osquery | عرض حالة نظام التشغيل على شكل جداول SQL واستعلامات مجدولة وتغيّرات | مصدر Endpoint telemetry مضبوط |
-| Fleet | إدارة مركزية لعقد osquery والتوزيع الأفقي مع استمرار تخزين النتائج مؤقتاً عند الانقطاع | مرجع لإدارة أسطول الأجهزة |
-| Velociraptor | لغة VQL وArtifacts وHunting وجمع الأدلة والتحقيق الجنائي الرقمي | تكامل اختياري للتحقيق المصرح به والاستجابة |
-| OpenSearch Security Analytics | Detectors وRules وFindings وAlerts ومحرك Correlation بين أنواع سجلات مختلفة، مع دعم Sigma | مرجع للبحث والكشف والارتباط |
-| OCSF | مخطط أحداث أمني مشترك ومحايد عن المورد | أساس التطبيع الداخلي |
-| Sigma | صيغة قواعد كشف قابلة للنقل بين منصات SIEM، مع قواعد ارتباط | صيغة استيراد/تصدير مستقبلية |
-| MITRE ATT&CK | وصف سلوك الخصم واستراتيجيات الكشف والتحليلات | إطار لتفسير التغطية والفجوات |
-| OpenTelemetry Collector | Receive → Process → Export pipelines مع موصلات قابلة للتمديد | مرجع لتصميم موصلات جمع مستقلة |
-| NATS JetStream | تدفق رسائل دائم، replay، consumers، acknowledgements وتسليم at-least-once | وسيط رسائل محتمل عند إثبات الحاجة |
-| TheHive / Cortex | إدارة الحالات وتحليل المؤشرات والاستجابة عبر API | مرجع للتحقيق والـ Case management |
-| Shuffle | سير عمل أتمتة مرئي يعتمد Apps وTriggers وConditions وVariables | مرجع لمحرك SOAR مستقبلي |
+| NVIDIA DeepStream 9.2 | Video analytics pipeline | فك فيديو متعدد المصادر، preprocessing، batching، inference، tracking، tiling، metadata outputs، hardware acceleration |
+| Ultralytics YOLO + Trackers | Object detection and tracking | كشف الكائنات وتتبع IDs مع ByteTrack وBoT-SORT وOC-SORT وDeep OC-SORT وFastTracker وTrackTrack |
+| Milestone XProtect | VMS / Control room | Live + recorded views، camera wall، hotspots، maps، alarms، bookmarks، evidence locking |
+| Frigate | Camera NVR + object detection | Zones، مناطق مقنّعة، فلاتر الأجسام، loitering، إدارة الكاميرات |
+| CVAT | Video annotation | Tracks، keyframes، interpolation، إعداد بيانات تدريب واختبار عالية الجودة |
+| OpenCV | Image/video processing and geometry | فك الفيديو، تحويل الإطارات، معايرة، Homography، معالجة هندسية |
+| AI City Challenge | Research benchmark | multi-camera tracking، traffic safety analysis، road-object/fisheye detection، anomalous transportation |
+| HOTA / TrackEval | Tracking evaluation | قياس جودة الكشف والارتباط والتموضع بدل الاكتفاء بالدقة أو FPS |
 
-### ملاحظات تقنية مهمة
+### أ. NVIDIA DeepStream
 
-- Wazuh يفصل بين جمع البيانات وتحليلها وفهرستها وعرضها، ويدعم أيضاً إرسال سجلات الأجهزة التي لا يمكن تثبيت Agent عليها. هذا الفصل أساسي لتجنب ربط الواجهة مباشرة بالمستشعرات.
-- Security Onion يجمع Suricata وZeek ورؤية المضيف وإدارة الحالات؛ يوضح أن SIEM قوي يحتاج بيانات شبكة ومضيف معاً.
-- Zeek ليس مجرد IDS توقيعي؛ أهميته في إنتاج سياق بروتوكولي Stateful يمكن ربطه مع الأحداث الأخرى.
-- Suricata يوفّر EVE JSON كخرج منظم، لذا نستهلك السجلات المنظمة بدلاً من إعادة كتابة محلل بروتوكولات كامل داخل Python.
-- osquery يقدم قيماً منظمة من نظام التشغيل، بينما Fleet يعالج الإدارة المركزية والتوزيع والتحمل عند انقطاع الاتصال.
-- OpenSearch Security Analytics يوضح فائدة الفصل بين rule match وfinding وalert، ويقدم correlation عبر مصادر مختلفة.
-- NATS JetStream يضيف تخزين الرسائل وإمكانية replay وacknowledgement. دلالة at-least-once تعني أن المستهلك يجب أن يكون idempotent ويتعامل مع الرسائل المكررة.
-- OCSF يوفر مخططاً محايداً عن المورد؛ يجب الاحتفاظ بالمصدر الخام لأن التطبيع قد يفقد حقولاً خاصة بالمورد.
+DeepStream 9.2 يبني graph على GStreamer: مصادر فيديو → decoder → preprocessing → stream muxer لدمج الإطارات من عدة مصادر → inference → tracker → visualization/tiler → output أو metadata broker. يدعم مصادر USB/CSI وRTSP والملفات، ويسمح بإرسال الفيديو أو metadata إلى الوجهات.
 
-## 3. تحديث مهم: MITRE ATT&CK في نوفمبر 2026
+**قرارنا:** نحتفظ بمسار Python عام قابل للتشغيل على CPU/أجهزة متعددة، ونضع DeepStream كـ backend تسريع اختياري عندما يكون الخادم مزوداً بعتاد NVIDIA مدعوم. وثائق 9.2 تشير إلى أن Python bindings القديمة Deprecated وتوصي بـ PyServiceMaker؛ لذا لا نبني تصميم المستقبل على bindings القديمة.
 
-بحسب صفحة الإصدارات الرسمية، الإصدار الحالي هو **ATT&CK v20.0** المنشور في 13 أكتوبر 2026. الإصدار 18 نقل بنية الدفاع من قوائم Detection داخل التقنيات إلى Detection Strategies وAnalytics، مع إلغاء نهج Data Sources القديمة بوصفها بنية متجددة. إصدار v20 وسّع بدوره استراتيجيات الكشف والـ Analytics، بما في ذلك أنماط أحدث مرتبطة بالذكاء الاصطناعي وسلاسل السلوك.
+### ب. كشف وتتبع الأجسام
 
-**قرار معماري:** نخزن روابط ATT&CK كمعرفات وإصدارات ونسخ بيانات قابلة للتحديث، ولا نربط المحرك بملف ثابت أو نفترض أن Data Sources القديمة هي مصدر التغطية الوحيد. يجب أن يربط كل كشف - عند توفر ذلك - بين:
-- Detection rule ID / version
-- ATT&CK technique/sub-technique
-- Detection Strategy / Analytics references
-- Data components أو متطلبات الرؤية
-- مستوى الثقة ومصدر الدليل
-- الإصدار الذي تم التحقق منه من ATT&CK
+الكشف يحدد صنف الجسم وموقعه في الإطار، والتتبع يربط مشاهدات الجسم عبر الإطارات ويمنحه track ID مؤقتاً داخل الكاميرا.
 
-لا يعني الربط بـ ATT&CK أن الحدث أثبت وجود هجوم أو أن التقنية نُفذت؛ إنه تصنيف تحليلي مع دليل يجب فحصه.
+- **ByteTrack:** خط أساس خفيف؛ يربط الصناديق عالية الثقة ثم يستعيد بعض الصناديق منخفضة الثقة لتقليل فقد التتبع.
+- **BoT-SORT:** يضيف تعويض حركة الكاميرا وإمكانية Re-ID.
+- **OC-SORT / Deep OC-SORT:** يستخدمان تحديثات تركز على المشاهدات للتعامل مع الحركة غير الخطية والانسداد.
+- **FastTracker:** خيار خفيف مع rollback للتعامل مع الانسداد.
+- **TrackTrack:** association متعددة الإشارات وتهيئة track واعية بالتكرار، مفيد للمشاهد المزدحمة وفق المقارنة في الوثائق الحالية.
 
-## 4. ما نقتبسه من الواجهات المركزية
+لا يوجد tracker أفضل لكل كاميرا. يجب benchmark على زاوية الكاميرا والدقة والازدحام والأجسام الصغيرة والإضاءة الليلية ومعدل الإطارات. لكل stream حالة tracker منفصلة؛ لا تشارك حالة tracker بين كاميرتين.
 
-الواجهات الأفضل في هذا المجال تنظّم العمل حول أسئلة المحلل، لا حول أسماء المكتبات:
+### ج. المعايرة وقياس السرعة
 
-- **Overview:** هل البيانات تصل؟ ما الأصول المتصلة؟ ما التنبيهات الجديدة والحرجة؟ ما مصادر الرؤية المتوقفة؟
-- **Event Explorer:** ماذا حدث؟ متى؟ أين؟ من؟ ما المصدر؟ ما الحقول الخام والمطبّعة؟
-- **Detection Center:** ما القاعدة التي اشتغلت؟ ما إصدارها؟ لماذا طابقت؟ ما حدودها والـ false positives؟
-- **Alert Queue:** ما الذي يحتاج إجراء الآن؟ ما المسؤول؟ ما SLA؟ هل تم الإقرار أو التصعيد؟
-- **Investigation Workspace:** ما تسلسل الأحداث والأصول والحسابات والاتصالات المرتبطة؟
-- **Asset & Sensor Inventory:** ما الذي نراقبه؟ ما الذي لا يرسل بيانات؟ ما سياسة الاحتفاظ؟
-- **Threat Intelligence:** ما الـ IOC أو الكيان المرتبط؟ ما المصدر وعمر المعلومة والثقة؟
-- **Case Management:** الأدلة، الملاحظات، المهام، القرارات، التوقيت، وسجل التدقيق.
-- **System Health:** معدل الإدخال، التأخر، إسقاط الأحداث، أخطاء الموصلات، حجم التخزين، واستهلاك الموارد.
+قياس السرعة من monocular CCTV أصعب من تحويل إزاحة pixels إلى رقم. المطلوب عادة:
+1. تحديد موضع ملامسة المركبة للطريق (bottom-center / road contact point).
+2. معرفة نقاط في الصورة تقابل نقاطاً أرضية مقاسة بالأمتار.
+3. تقدير Homography بين مستوى الصورة ومستوى الطريق.
+4. إسقاط نقاط track إلى المستوى المتري.
+5. قياس المسافة المترية على مدى زمني موثوق.
+6. التحقق مقابل رادار أو مرجع مستقل وقياس الانحياز وMAE.
 
-لا نريد خريطة جغرافية مزخرفة أو رسوماً كثيرة بلا قيمة. نريد جداول عالية الكثافة قابلة للفرز، فلاتر محفوظة، تفاصيل قابلة للفتح، Timeline، وGraph يظهر فقط عندما يوضح علاقة حقيقية.
+الطريق يفترض تقريباً سطحاً مستوياً في المنطقة المعايرة؛ الميل والتضاريس والمنحنيات أو تغير موضع الكاميرا قد تتطلب calibration أكثر تعقيداً أو إعادة معايرة. أي تغيير في موضع/Zoom/Focus/زاوية الكاميرا قد يبطل المعايرة.
 
-## 5. التصميم المقترح لنظامنا
+**قرار أمان:** وقت وصول RTSP/MJPEG عبر الشبكة ليس بالضرورة وقت التقاط الكاميرا. لا نستخدم وصول الإطار إلى الخادم لفرض مخالفة سرعة. يجب أن يكون الزمن المصدر أو PTS موثوقاً، والمعايرة موثقة، وقياس السرعة مختبراً.
+
+### د. Multi-camera tracking
+
+نبدأ بتتبع محلي لكل كاميرا. الانتقال عبر الكاميرات يتطلب:
+- تزامن ساعات الكاميرات.
+- مواقع الكاميرات ومجالات الرؤية.
+- مناطق تداخل أو بوابات انتقال.
+- أزمنة سفر منطقية.
+- Re-ID/appearance embeddings عند الحاجة وبعد مراجعة الخصوصية.
+- confidence score وسجل سبب الربط.
+
+معرّف track داخل كاميرا واحدة ليس هوية عالمية، ولا يعني أن جسمين متشابهين في كاميرتين هما الجسم نفسه.
+
+### هـ. واجهات مراكز التحكم
+
+من تجربة XProtect وSmart Wall نتعلم:
+- Views متعددة قابلة للتخصيص.
+- تخطيط Grid لكاميرات متعددة.
+- Hotspot لعرض الكاميرا المختارة بدقة أكبر.
+- Alarm list مرتبة وقابلة للإقرار والإسناد.
+- Smart maps تظهر الكاميرات والأحداث ومواقعها.
+- Bookmarks ومقاطع وسياق زمني للتحقيق.
+- Video wall يمكن توجيه الأحداث الحرجة إليه.
+
+من Frigate نتعلم أن Zone ليست مجرد مستطيل: يمكن تعريف مضلع، وربطه بأنواع أجسام، وعتبة تواجد، وسلوك مثل loitering. يجب أن يعتمد دخول المنطقة على نقطة تمثيل للكائن مناسبة للمشهد؛ نقطة أسفل الصندوق قد تكون أفضل من تداخل مساحة الصندوق كلها مع المنطقة.
+
+## 3. خوارزميات ومنظومة التحليل المقترحة
+
+### 3.1 طبقة الرؤية
+- Object detection للمركبات، الحافلات، الشاحنات، الدراجات، الأشخاص، والعناصر المهمة بحسب السيناريو.
+- Segmentation عند الحاجة إلى فهم حدود الطريق والممرات.
+- Vehicle/person keypoints أو orientation عند الحاجة إلى اتجاه وحجم أفضل.
+- OCR/ANPR كإضافة اختيارية فقط بعد تثبيت الحاجة والضوابط القانونية.
+- Image quality/anomaly: blur، darkness، glare، camera moved، frozen frames.
+
+### 3.2 طبقة التتبع
+- Kalman motion prediction.
+- IoU / Hungarian assignment.
+- ByteTrack-style two-stage association.
+- Appearance Re-ID optional.
+- Optical-flow/global-motion compensation للكاميرات المتحركة.
+- Lost-track recovery وduplicate-track suppression.
+- تقييم HOTA وIDF1 وMOTA وfragmentation على dataset معلّمة.
+
+### 3.3 تحليلات المرور
+- Line crossing وdirectional counting.
+- Lane/zone occupancy and density.
+- Speed estimation after ground-plane calibration.
+- Wrong-way candidate from projected direction vs configured lane vector.
+- Queue length and congestion over a time window.
+- Stopped vehicle detection from low world-coordinate displacement over time.
+- Road blockage detection from persistent occupancy.
+- Traffic light state recognition كمسار مستقل يتطلب dataset وتحققاً.
+- Near-miss/risk interaction: أقرب مسافة ومسارات متقاطعة وتوقيت الاقتراب كإشارة مرشحة، لا كحكم حادث مؤكد.
+
+### 3.4 تحليلات الأمن المرئي
+- Restricted-zone intrusion.
+- Virtual tripwire/perimeter crossing.
+- Loitering with dwell-time thresholds.
+- Crowd-density anomalies.
+- Abandoned/unattended object candidates.
+- After-hours motion rules.
+- Camera tampering / occlusion / field-of-view change.
+- كل إنذار يعرض clip وframe وtrack context والقاعدة والحدود والـ confidence؛ يحتاج مراجعة بشرية.
+
+## 4. ابتكارات مقترحة لهذا المشروع
+
+### Traffic Flow Digital Twin Lite
+تمثيل التقاطع/المقطع المروري في إحداثيات أرضية، وتكوين مسارات track مترية، ثم استخراج التدفق والكثافة والسرعة والصفوف ومناطق التعارض. يبدأ كطبقة هندسية ثنائية الأبعاد بدلاً من بناء محاكاة ثلاثية الأبعاد باهظة.
+
+### Risk Interaction Engine
+يبني مسارات متوقعة قصيرة للمركبات والمشاة، ويقيس closest approach وtime-to-collision وoverlap of predicted corridors. ينتج مؤشر خطر قابل للتفسير، مع تجنب ادعاء collision إذا كانت الإشارات غير كافية.
+
+### Camera Health & Blind-Spot Monitor
+يراقب انقطاع البث، تجمد الإطار، التأخر، blur، dark frames، انسداد العدسة، فقدان الحقول الزمنية، وتغير منظور الكاميرا. يوقف صلاحية المعايرة عندما تتغير هندسة الصورة ويطلب إعادة فحص.
+
+### Cross-Camera Handoff
+يربط track بين كاميرتين عبر بوابات مكانية وزمنية ومعالم مركبة عامة (اختياري)، ويعرض confidence والتفسير، مع قابلية رفض الربط. لا نحول similarity إلى هوية إنسان مؤكدة.
+
+### Evidence Timeline
+يحتفظ بمقطع قبل الحدث وبعده، لقطات مفتاحية، track metadata، مصدر الإطار وPTS، calibration version، hash، ومَن فتح أو صدّر الدليل. تُضاف سلسلة الحيازة القانونية فقط بعد تنفيذ سياسات غير قابلة للعبث واختبارها.
+
+## 5. المعمارية التقنية المقترحة
 
 ~~~text
-                    DATA SOURCES
-       +---------------+------------------+
-       |               |                  |
-     ENDPOINTS       NETWORK             CLOUD
-  Wazuh/osquery   Zeek/Suricata        Audit APIs
-       |               |                  |
-       +---------------+------------------+
-                       |
-               INGESTION ADAPTERS
-          HTTP / Syslog / Files / APIs
-                       |
-              VALIDATION + NORMALIZE
-                  OCSF-aligned
-                       |
-                EVENT ENRICHMENT
-       Asset context / Identity / TI / Geo (optional)
-                       |
-                DETECTION FABRIC
-      Sigma rules / Thresholds / Sequences / Graph
-                       |
-               ALERT CORRELATION
-         Dedup / Risk / Episode / Provenance
-                       |
-              INVESTIGATION SERVICE
-        Cases / Evidence / Timeline / Audit trail
-                       |
-                 SOC WEB CONSOLE
+CAMERA SOURCES
+RTSP / ONVIF / USB / ESP32 MJPEG / Files
+        |
+SOURCE ADAPTERS + CAMERA HEALTH
+        |
+DECODE / FRAME PTS / SYNCHRONIZATION
+        |
+DETECTION (YOLO / ONNX / OpenVINO / DeepStream)
+        |
+PER-CAMERA TRACKERS (ByteTrack / BoT-SORT / ...)
+        |
+GROUND-PLANE CALIBRATION + MULTI-CAMERA ALIGNMENT
+        |
++-----------------------------+-----------------------------+
+| TRAFFIC ANALYTICS           | VISUAL SECURITY ANALYTICS    |
+| speed / count / lanes       | zone / tripwire / loitering  |
+| direction / queue / risk    | crowd / object / perimeter   |
++-----------------------------+-----------------------------+
+        |
+EVENT CORRELATION + EVIDENCE CLIPS
+        |
+API / DB / SEARCH / AUDIT
+        |
+CENTRAL CONTROL ROOM WEB UI
 ~~~
 
-### 5.1 طبقات Python
+### طبقات التنفيذ
+- **Python control plane:** إعداد الكاميرات، قواعد التحليل، الأحداث، التخزين، API، والتقارير.
+- **Video data plane:** workers منفصلة لكل كاميرا أو مجموعة كاميرات، وتستطيع استخدام CPU/GPU backends.
+- **Inference backend:** واجهة abstract تسمح بتبديل Ultralytics/ONNX Runtime/OpenVINO/DeepStream حسب العتاد والترخيص.
+- **Event storage:** SQLite للتطوير الفردي، ثم PostgreSQL للبيانات التشغيلية، وClickHouse عند احتياج أحداث عالية الحجم، وobject storage للمقاطع.
+- **Frontend:** React + TypeScript، بث WebRTC/HLS حسب التأخير والبنية، WebSocket/SSE للـ metadata والإنذارات.
+- **Messaging:** لا نضيف Kafka/NATS في البداية قبل قياس streams وFPS وعدد workers. يمكن استخدامهما عند الحاجة للفصل وإعادة المحاولة وتوسيع المعالجة.
 
-**API Layer**
-- FastAPI وPydantic.
-- OpenAPI لواجهات الإدخال والاستعلام.
-- مصادقة ومفاتيح خدمة وRBAC لاحقاً.
-- لا تضع منطق الكشف داخل route handlers.
+## 6. البيانات المرجعية والاختبار
 
-**Domain Layer**
-- Event / Finding / Alert / Case / Asset / Sensor.
-- عقود ثابتة ومستقلة عن FastAPI أو قاعدة البيانات.
-- الوقت دائماً timezone-aware ومخزن بصيغة UTC.
+- AI City Challenge 2026: تحديات متعددة الكاميرات وثلاثية الأبعاد وحركة الأشخاص/المركبات وتحليل السلامة المرورية.
+- AI City Challenge 2025: تتبع متعدد الكاميرات، Traffic Safety Description and Analysis، fisheye road-object detection.
+- BrnoCompSpeed: مرجع معروف لقياس سرعة المركبات من كاميرات المرور.
+- MOTChallenge/TrackEval: قياس جودة التتبع؛ لا يكفي تقييم detector وحده.
+- CVAT: تعليم tracks وkeyframes وإعداد مجموعة اختبار داخلية.
 
-**Ingestion Layer**
-- Adapter لكل تنسيق أو مصدر.
-- يحتفظ بالـ raw payload وبهوية المستشعر ووقت الجمع.
-- يدعم batch limits، rate limits، idempotency وdead-letter لاحقاً.
+لا نبدأ تدريب نموذج ضخم قبل أن نحدد classes والسيناريوهات وزاوية الكاميرا والدقة ونحصل على dataset ممثل. يمكن البدء بنماذج عامة للكشف ثم بناء dataset خاص للمناطق والأحداث المحلية عند توافر صور وفيديو مصرح بها.
 
-**Normalization Layer**
-- نموذج داخلي مستوحى من OCSF.
-- خرائط من ECS/Zeek/Suricata/osquery/Wazuh إلى الحقول المشتركة.
-- لا يحذف حقول المصدر غير المعروفة.
-- يضيف schema_version وnormalizer_version لتسهيل إعادة التطبيع.
+## 7. قيود العتاد والاستراتيجية
 
-**Detection Layer**
-- Exact matching / Sigma-like rules.
-- Threshold windows.
-- Stateful sequences.
-- Cross-source correlation.
-- Baselines/anomaly detection.
-- كل كاشف يعيد سبب المطابقة وأحداث الدليل والقيود، وليس score فقط.
+- CPU-only: عدد كاميرات قليل ودقة أو FPS محدودان، مع sampling مدروس.
+- GPU استهلاكي بذاكرة محدودة: نموذج صغير أو ONNX، batching محسوب، decoding مناسب، وتحديد FPS لكل كاميرا.
+- NVIDIA T4/Jetson مدعوم: تقييم DeepStream/TensorRT لتوسيع عدد streams.
+- لا نعد بعدد كاميرات أو FPS مسبقاً؛ يجب benchmark على نفس الدقة والترميز ومعدل الإطارات وطراز GPU وعمليات التسجيل.
+- نحتفظ بمسار inference خارجي/موزع لاحقاً إذا كان الخادم المركزي لا يستطيع فك كل الفيديو وتحليله.
 
-**Storage Layer**
-- فصل بيانات التشغيل والمعاملات عن أحجام الأحداث.
-- بداية التطوير: In-memory adapter للاختبارات فقط.
-- المرحلة الصغيرة: PostgreSQL للبيانات التشغيلية وpartitioning/retention مناسب للأحداث.
-- عند نمو معدل الإدخال والبحث: تقييم ClickHouse أو OpenSearch وفق workload حقيقي.
-- لا نضيف Kafka أو NATS أو ClickHouse لمجرد أنها تقنيات مشهورة؛ نضيفها بعد قياس throughput والـ latency والذاكرة والتكلفة.
+## 8. المصادر الرسمية والأبحاث التي تمت مراجعتها
 
-**Streaming Layer**
-- البداية: واجهة Ingestion مباشرة قابلة للاستبدال.
-- لاحقاً: NATS JetStream أو Kafka/Redpanda عند الحاجة إلى فصل المنتجين عن المستهلكين وإعادة تشغيل الأحداث.
-- يجب أن تكون المعالجة idempotent بسبب احتمالية إعادة التسليم.
+1. NVIDIA DeepStream 9.2 overview and architecture: https://docs.nvidia.com/metropolis/deepstream/9.2/text/DS_Overview.html
+2. NVIDIA DeepStream SDK guide: https://docs.nvidia.com/deepstream/9.2/
+3. DeepStream reference application: https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_ref_app_deepstream.html
+4. Ultralytics tracking documentation: https://docs.ultralytics.com/modes/track/
+5. Ultralytics tracking datasets overview: https://docs.ultralytics.com/datasets/track/
+6. AI City Challenge 2026: https://www.aicitychallenge.org/
+7. AI City Challenge 2026 Track 1: https://www.aicitychallenge.org/2026-track1/
+8. AI City Challenge dataset access: https://www.aicitychallenge.org/ai-city-challenge-dataset-access/
+9. AI City Challenge 2025: https://www.aicitychallenge.org/2025-ai-city-challenge/
+10. HOTA paper: https://arxiv.org/abs/2009.07736
+11. Robust Automatic Monocular Vehicle Speed Estimation for Traffic Surveillance (ICCV 2021): https://openaccess.thecvf.com/content/ICCV2021/papers/Revaud_Robust_Automatic_Monocular_Vehicle_Speed_Estimation_for_Traffic_Surveillance_ICCV_2021_paper.pdf
+12. Automatic Roadside Camera Calibration with Transformers: https://pmc.ncbi.nlm.nih.gov/articles/PMC10708783/
+13. Vision-based vehicle speed estimation survey: https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/itr2.12079
+14. Toward Planet-Wide Traffic Camera Calibration (WACV 2024): https://openaccess.thecvf.com/content/WACV2024/papers/Vuong_Toward_Planet-Wide_Traffic_Camera_Calibration_WACV_2024_paper.pdf
+15. Milestone XProtect Smart Client 2026r1: https://doc.milestonesys.com/xprotect/xprotect-smart-client/2026r1/en/what-is-xprotect-smart-client-.html
+16. Milestone XProtect Smart Maps: https://doc.milestonesys.com/xprotect/xprotect-smart-client/2026r1/en/maps-and-smart-maps-197006
+17. Milestone XProtect Smart Wall: https://doc.milestonesys.com/xprotect/xprotect-smart-wall-for-users/2026r1/en/displaying-content-on-video-walls.html
+18. Frigate zones: https://docs.frigate.video/configuration/zones/
+19. CVAT track mode and interpolation: https://docs.cvat.ai/docs/annotation/manual-annotation/modes/track-mode-basics/
 
-**Frontend**
-- React + TypeScript كتطبيق ويب منفصل عن محرك Python.
-- ECharts للرسوم الكثيفة، وواجهة جداول قابلة للفرز والتصفية.
-- WebSocket/SSE للتحديثات الحية عند جاهزية خدمة التنبيهات.
-- لا ينبغي وضع منطق أمني موثوق داخل المتصفح.
-
-## 6. خوارزميات الكشف المقترحة
-
-لن نستخدم نموذج Machine Learning واحداً لكل شيء. نستخدم حزمة متعددة المستويات:
-
-1. **Deterministic rules:** توقيعات وأحداث معروفة مع أسباب مطابقة صريحة.
-2. **Window aggregations:** عدّ وتواتر وDistinct counts ضمن نوافذ زمنية.
-3. **Sequence detection:** تسلسل أحداث مرتب زمنياً (مثلاً فشل دخول متكرر ثم نجاح ثم جلسة جديدة).
-4. **Entity graph correlation:** ربط المستخدم والجهاز وعنوان الشبكة والعملية والجلسة والملف ضمن رسم بياني زمني.
-5. **Risk accumulation:** رفع مستوى الحادث عندما تتراكم إشارات مستقلة على الكيان نفسه، مع عدم جمع درجات متشابهة مرتين.
-6. **Behavioral baselines:** مقارنة السلوك بخط أساس خاص بالمستخدم أو الجهاز أو الوقت، مع نافذة تعلم ومقاومة للتسميم البطيء.
-7. **Anomaly detection:** نماذج إحصائية/ML كإشارة مساعدة، لا كحكم نهائي ولا كإجراء تلقائي.
-8. **Detection quality:** قياس precision/recall عندما تتوفر بيانات موسومة، ومعدل الضجيج، والـ coverage، وزمن الاكتشاف.
-
-### ابتكار مقترح: Behavioral Episode Graph
-
-بدلاً من عرض كل تنبيه كحادثة منفصلة، نبني **حلقة سلوك (Episode)**:
-
-- كل Event عقدة.
-- المستخدم والجهاز وIP والعملية والجلسة كيانات مرتبطة.
-- كل علاقة تحمل نوعها ومصدرها ووقت بدايتها ونهايتها.
-- قواعد التسلسل تضيف حوافاً مفسّرة مثل "بعد فشل الدخول حدث نجاح من المصدر نفسه".
-- يسجل النظام لماذا ضمّ حدثين إلى الحلقة، ولماذا لم يضم أحداثاً أخرى.
-- النتيجة صفحة تحقيق بجدول زمن + رسم علاقات + أدلة، لا مجرد رسم شبكي جميل.
-
-### ابتكار مقترح: Sensor Confidence & Blind-Spot Engine
-
-يقيس النظام جودة الرؤية لكل مصدر:
-- آخر وقت وصول.
-- معدل وصول متوقع مقابل الفعلي.
-- فجوات الوقت والعدادات.
-- تغيّر شكل البيانات أو اختفاء الحقول.
-- نسبة الرفض أو فشل التطبيع.
-- تأخر الإدخال.
-- ما إذا كانت التغطية المطلوبة لاستراتيجية كشف معينة موجودة فعلاً.
-
-النتيجة ليست فقط "لا توجد تهديدات"، بل "لم نرَ تهديداً ضمن مصادر كانت سليمة وتغطي السلوك المتوقع" أو "لا يمكن الحكم بسبب فجوة مستشعر". هذه نقطة مهمة لمنع الاطمئنان الكاذب.
-
-### ابتكار مقترح: Detection Replay & Regression Lab
-
-كل قاعدة كشف تحتفظ بإصدارها، وبعينات الاختبار المتوقعة، والحقول المطلوبة. عند تغيير قاعدة أو Normalizer:
-- نعيد تشغيل مجموعة أحداث اختبار محفوظة.
-- نقارن التنبيهات القديمة والجديدة.
-- نعرض الزيادة في التنبيهات المكررة أو النتائج المفقودة.
-- لا ننشر القاعدة إذا فشلت اختبارات regression أو توسعت المطابقة بشكل غير مفهوم.
-
-## 7. مخطط التخزين المستقبلي
-
-نبدأ بكيانات صريحة قابلة للتطور:
-
-- Tenant
-- Asset
-- Sensor
-- SecurityEvent
-- DetectionRule
-- Finding
-- Alert
-- BehavioralEpisode
-- Case
-- EvidenceReference
-- Indicator
-- RuleExecution
-- AuditEntry
-
-الأحداث عالية الحجم لا ينبغي أن تربك جداول الحالات والمستخدمين. لذلك سنفصل لاحقاً:
-- مخزن الأحداث/التحليلات.
-- PostgreSQL للكيانات التشغيلية والعلاقات المرجعية.
-- مخزن artifacts للأدلة الكبيرة، مع hashes وسياسة احتفاظ.
-- فهرس بحث عند الحاجة.
-
-كل سجل دليل يجب أن يتضمن المصدر والوقت والـ hash وسياسة الاحتفاظ وإمكانية إعادة الوصول، مع تجنب تخزين أسرار أو محتوى حساس غير ضروري.
-
-## 8. الأمان والخصوصية
-
-- كل مصدر مراقبة يجب أن يكون مصرحاً به ومُسجلاً في Inventory.
-- لا نطوّر Agent خفياً أو آليات تجاوز حماية؛ التكامل يكون عبر Agents معلنة أو Syslog أو APIs أو أدوات دفاعية موثقة.
-- TLS بين المكونات عند الانتقال من Loopback.
-- RBAC وMFA وسجل تدقيق عند إضافة مستخدمين.
-- مفاتيح API في secrets manager أو environment، لا في Git.
-- أقل صلاحية لازمة لكل Connector.
-- عدم تخزين كلمات مرور أو session tokens في الأحداث.
-- تشفير البيانات الحساسة والنسخ الاحتياطية.
-- الاحتفاظ والحذف وفق سياسة صريحة، مع إظهار ما يجمعه كل Sensor.
-- كل رد آلي عالي الأثر يحتاج مراجعة بشرية، وسياسة موافقة، وسجل قرار.
-
-## 9. خطة النشر حسب الحجم
-
-| النمط | الاستخدام | التقنية |
-|---|---|---|
-| Developer / Lab | تطوير واختبارات وبيانات تجريبية | Python API + In-memory/Test adapters |
-| Small single-node | بيئة مصرح بها محدودة | FastAPI + PostgreSQL + ملفات أحداث أو مخزن خفيف |
-| Central platform | عدة مصادر ومعدل بيانات أكبر | API + Queue + PostgreSQL + OpenSearch أو ClickHouse |
-| Distributed | عدة مواقع ومصادر كثيرة | Ingestion gateways + replicated queue + partitioned storage + horizontally scaled workers |
-
-يجب اختيار النمط بعد قياس عدد المستشعرات، events/second، متوسط حجم الحدث، retention، وعدد المحللين المتزامنين. لا معنى لوعد "منافس للمؤسسات" قبل قياس هذه المتغيرات.
-
----
-
-## 10. المصادر الرسمية المستخدمة
-
-1. Wazuh architecture: https://documentation.wazuh.com/current/getting-started/architecture.html
-2. Wazuh components and XDR/SIEM design: https://documentation.wazuh.com/current/getting-started/components/index.html
-3. Wazuh Dashboard: https://documentation.wazuh.com/current/getting-started/components/wazuh-dashboard.html
-4. Security Onion architecture and visibility: https://docs.securityonion.net/en/3/dev/introduction/
-5. Zeek repository and network analysis capabilities: https://github.com/zeek/zeek
-6. Zeek Logging Framework: https://docs.zeek.org/en/current/frameworks/logging.html
-7. Suricata EVE JSON output: https://docs.suricata.io/en/latest/output/eve/eve-json-output.html
-8. osquery architecture: https://github.com/osquery/osquery
-9. osquery query packs: https://osquery.readthedocs.io/en/latest/deployment/configuration/
-10. Fleet reference architectures: https://fleetdm.com/docs/deploy/reference-architectures
-11. Velociraptor documentation: https://docs.velociraptor.app/
-12. OCSF schema: https://github.com/ocsf/ocsf-schema
-13. Sigma specification: https://sigmahq.io/sigma-specification/
-14. Sigma correlation rules: https://sigmahq.io/sigma-specification/specification/sigma-correlation-rules-specification.html
-15. MITRE ATT&CK current releases: https://attack.mitre.org/resources/versions/
-16. MITRE ATT&CK October 2026 updates: https://attack.mitre.org/resources/updates/updates-october-2026/
-17. OpenSearch Security Analytics: https://docs.opensearch.org/latest/security-analytics/
-18. OpenSearch correlation rules: https://docs.opensearch.org/latest/security-analytics/sec-analytics-config/correlation-config/
-19. OpenTelemetry Collector architecture: https://opentelemetry.io/docs/collector/architecture/
-20. NATS JetStream: https://docs.nats.io/concepts/jetstream
-21. TheHive/Cortex: https://docs.strangebee.com/cortex/
-22. Shuffle workflows: https://shuffle.security/docs/workflows
-23. Pydantic Settings: https://pydantic.dev/docs/validation/latest/concepts/pydantic_settings/
-
-### كيف نستخدم المراجع
-
-هذه المصادر تثبت القدرات المنشورة في الوثائق الرسمية، لكنها لا تثبت أن دمجاً معيناً هو الأسرع أو الأنسب لكل جهاز. أي اختيار إنتاجي سيُبنى على اختبار حقيقي بنفس عينة السجلات ونفس معدل الأحداث ونفس متطلبات retention والأداء.
+### ملاحظة حول المصادر
+الوثائق تشرح إمكانات الأدوات المرجعية، والأبحاث توضح أساليب القياس. لا يعني ذلك أن دمج هذه المكونات في مشروعنا جاهز أو أن نتائجها ستنتقل مباشرة إلى كاميراتنا. سنختبر كل خوارزمية على فيديوهات ممثلة ونحتفظ بمقاييس الأخطاء والموارد قبل اعتمادها.
