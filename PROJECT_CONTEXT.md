@@ -996,3 +996,36 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
   - كشف YOLO الفعلي في النسخة الحالية يستخدم UltralyticsTrackingBackend، ولذلك يحتاج حاليًا إلى Ultralytics واعتمادياته، ومنها PyTorch وTorchvision.
   - هذا ليس قيداً حتمياً على معمارية المنصة: يمكن بناء backend مستقل ONNX Runtime أو OpenVINO لتشغيل نموذج مُصدّر دون PyTorch على جهاز الإنتاج، مع ضرورة تنفيذ preprocessing/postprocessing والتتبع واختبار التوافق والدقة والأداء. توثيق Ultralytics الحالي يدعم تصدير YOLO26 إلى ONNX، كما أن wheel ONNX Runtime CPU لـ Linux x86_64 / Python 3.12 حجمه 23.8 MB في الإصدار 1.31.1؛ حجم runtime وحده لا يعادل حجم النموذج أو بقية النظام.
 - لم يتخذ المستخدم بعد قراراً بتغيير backend، ولم يتم تعديل الكود أو الاعتماديات في هذه المرحلة. ينبغي عدم مطالبته بتثبيت PyTorch قبل عرض الخيارين وأخذ قراره حول تفضيل سرعة البدء الحالية أم تقليل الحجم عبر backend مستقل.
+
+
+### 21.12 — تشغيل واجهة المختبر دون محرك الرؤية أو PyTorch (2026-11-02)
+
+- سأل المستخدم إن كان يستطيع عرض الواجهة الحالية قبل تثبيت وتشغيل محرك المراقبة.
+- تمت مراجعة app.py وlab_routes.py وvideo_processor.py وultralytics_backend.py وauth.py وملفات web/lab.html وweb/lab.js وpyproject.toml.
+- النتيجة المؤكدة: يمكن تشغيل واجهة المختبر دون تثبيت extras الفيديو والرؤية، باستخدام الاعتماديات الأساسية فقط عبر `python -m pip install -e .`.
+- السبب:
+  - `app.py` يحمل lab router وصفحة HTML وملفات static.
+  - `lab_routes.py` يستخدم importlib.util.find_spec لفحص av/cv2/ultralytics، ولا يفرض استيرادها عند عرض capabilities.
+  - `UltralyticsTrackingBackend` لا يستورد ultralytics إلا داخل constructor عند بدء مهمة معالجة فعلية.
+  - `VideoLabProcessor.run` يستورد cv2 وav داخل دالة المعالجة فقط.
+  - `python-multipart` ضمن dependencies الأساسية، وهو لازم لتسجيل endpoints التي تستخدم File/Form.
+- في وضع العرض فقط:
+  - تفتح صفحة /lab وتظهر عناصر الواجهة الفعلية، ويمكن معاينة الملف المختار في عنصر الفيديو داخل المتصفح محلياً.
+  - الواجهة تستدعي /api/v1/lab/capabilities وتعرض رسالة بالحزم الناقصة.
+  - لن يعمل تحليل الفيديو أو البث الحي؛ لا توجد مربعات كشف أو Track IDs أو عدّ حقيقي، وبدء مهمة التحليل سيفشل إذا لم تثبت الإضافات.
+  - روابط بعض أقسام غرفة العمليات في القائمة معطلة/معلّمة بأنها لاحقاً في النسخة الحالية؛ هذه الصفحة هي واجهة المختبر التي نراجعها وليست بعد لوحة المنتج النهائية.
+- أوامر Kali لعرض الواجهة فقط:
+  ```bash
+  sudo apt update
+  sudo apt install -y git python3.12-venv
+  git clone https://github.com/CybersecurityRahbar/Cyber-surveillance-system.git
+  cd Cyber-surveillance-system
+  python3.12 -m venv .venv
+  source .venv/bin/activate
+  python -m pip install --upgrade pip
+  python -m pip install -e .
+  python -m uvicorn traffic_surveillance.api.app:app --reload --host 127.0.0.1 --port 8000
+  ```
+- افتح http://127.0.0.1:8000/lab. لا تثبت `.[video]` أو Ultralytics أو PyTorch ما دام الهدف مشاهدة التصميم فقط.
+- لم يتم تغيير كود النظام في هذه الخطوة؛ تم تقديم مسار تشغيل خفيف للواجهة فقط.
+- لم يتم اختبار ذلك على جهاز المستخدم حتى الآن.
