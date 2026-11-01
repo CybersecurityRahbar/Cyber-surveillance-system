@@ -5,7 +5,16 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -211,7 +220,7 @@ async def list_jobs(request: Request) -> list[dict]:
 async def create_video_job(
     request: Request,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     tracker: str = Form(default="bytetrack.yaml"),
     confidence: float = Form(default=0.25, ge=0.05, le=0.95),
     line_position: float = Form(default=0.65, ge=0.1, le=0.9),
@@ -225,7 +234,10 @@ async def create_video_job(
     if suffix not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail="Unsupported video extension. Allowed: " + ", ".join(sorted(ALLOWED_EXTENSIONS)),
+            detail=(
+                "Unsupported video extension. Allowed: "
+                + ", ".join(sorted(ALLOWED_EXTENSIONS))
+            ),
         )
 
     settings = request.app.state.settings

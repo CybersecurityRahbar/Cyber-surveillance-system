@@ -1,9 +1,9 @@
 from collections import defaultdict, deque
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from time import monotonic
-from typing import Callable
 
 from traffic_surveillance.analytics.line_crossing import DirectedLineCounter
 from traffic_surveillance.domain.models import Detection, TimestampQuality
@@ -122,7 +122,10 @@ class VideoLabProcessor:
             while True:
                 if stop_event is not None and stop_event.is_set():
                     break
-                if live_duration_seconds is not None and monotonic() - start_clock >= live_duration_seconds:
+                if (
+                    live_duration_seconds is not None
+                    and monotonic() - start_clock >= live_duration_seconds
+                ):
                     break
 
                 if is_webcam:
