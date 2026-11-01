@@ -878,3 +878,25 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - Unit and API tests: success — 11 passed, 1 Starlette TestClient deprecation warning.
 - التغطية الإجمالية التي ظهرت في التقرير: 67%؛ مسارات تحميل YOLO وRTSP الحقيقية غير مغطاة بالاختبار الآلي لأنها تحتاج نموذج/مصدر خارجي.
 - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41349134765
+
+
+### 21.6 — إرشادات تشغيل المختبر محلياً على Windows (2026-11-01)
+
+- سأل المستخدم عن طريقة تجربة النظام على اللابتوب؛ تم تأكيد أن الطريقة الموصى بها هي استنساخ المستودع محلياً عبر Git ثم تشغيل FastAPI محلياً وفتح صفحة /lab.
+- المتطلبات المحددة في README وpyproject.toml: Python 3.12 أو 3.13؛ المشروع يرفض إصدارات أقل من 3.12 أو 3.14 فأعلى.
+- أوامر PowerShell الأساسية:
+  ```powershell
+  git clone https://github.com/CybersecurityRahbar/Cyber-surveillance-system.git
+  cd Cyber-surveillance-system
+  py -3.12 -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  python -m pip install --upgrade pip
+  pip install -e ".[dev,video,vision]"
+  python -m uvicorn traffic_surveillance.api.app:app --reload
+  ```
+- عنوان المختبر المحلي: http://127.0.0.1:8000/lab ؛ توثيق API: http://127.0.0.1:8000/docs ؛ فحص الصحة: http://127.0.0.1:8000/healthz.
+- إذا منع PowerShell تفعيل البيئة الافتراضية، يمكن السماح مؤقتاً لهذه النافذة فقط باستخدام `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` ثم إعادة أمر التفعيل.
+- يجب رفع فيديو تجريبي من صفحة المختبر؛ المتصفح يعرض معاينة محلية، لكن التحليل الفعلي يتم على خادم Python المحلي. ينصح بأول تجربة بمقطع قصير ودقة منخفضة نسبياً.
+- تثبيت `vision` يضيف Ultralytics؛ قد ينزل YOLO26n أوزانه تلقائياً عند أول تحليل، ويحتاج ذلك إلى اتصال إنترنت. تثبيت `video` يوفر PyAV/OpenCV لمعالجة الفيديو. مجموعة `dev` مخصصة أيضاً لأدوات الاختبار.
+- في حال استنساخ المستودع سابقاً، يستخدم `git pull` داخل مجلد المشروع بدلاً من استنساخه مرة أخرى.
+- لم يتم تشغيل التطبيق على جهاز المستخدم في هذه المحادثة؛ نجاح CI السابق لا يثبت بعد نجاح التثبيت أو تحليل فيديو حقيقي على جهازه. يجب طلب سجل الخطأ أو صورة الشاشة إن فشل التشغيل، وعدم افتراض السبب.
