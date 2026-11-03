@@ -81,8 +81,8 @@ class PretrainedVehicleAttributes:
 
     @staticmethod
     def _to_pil(crop: Any):
-        from PIL import Image
         import cv2
+        from PIL import Image
 
         rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
         return Image.fromarray(rgb)
@@ -165,7 +165,7 @@ class PretrainedVehicleAttributes:
                     for index, score in make_predictions
                     if 0 <= index < len(self._make_model_labels)
                 ],
-                "model": MAKE_MODEL_REPOSITORY,
+                "model_repository": MAKE_MODEL_REPOSITORY,
                 "status": "candidate" if accepted_make else "low_confidence_or_unknown",
             },
         }
