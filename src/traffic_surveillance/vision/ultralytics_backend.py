@@ -34,7 +34,18 @@ class UltralyticsTrackingBackend:
         self._model = YOLO(model_source)
         self._tracker = tracker
         self._confidence = confidence
-        self._device = device
+        if device is None:
+            try:
+                import torch
+
+                self._device = "0" if torch.cuda.is_available() else "cpu"
+                self._half = bool(torch.cuda.is_available())
+            except ImportError:
+                self._device = "cpu"
+                self._half = False
+        else:
+            self._device = device
+            self._half = str(device).lower() not in {"cpu"}
 
     def detect_and_track(self, frame) -> list[Detection]:
         results = self._model.track(
@@ -43,6 +54,9 @@ class UltralyticsTrackingBackend:
             tracker=self._tracker,
             conf=self._confidence,
             device=self._device,
+            imgsz=640,
+            max_det=100,
+            half=self._half,
             verbose=False,
         )
         if not results:

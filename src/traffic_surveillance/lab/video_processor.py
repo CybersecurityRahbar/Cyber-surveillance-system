@@ -7,6 +7,7 @@ from time import monotonic
 
 from traffic_surveillance.analytics.line_crossing import DirectedLineCounter
 from traffic_surveillance.domain.models import Detection, TimestampQuality
+from traffic_surveillance.vision.appearance import estimate_vehicle_color
 
 VEHICLE_CLASSES = {"car", "motorcycle", "motorbike", "bus", "truck", "bicycle"}
 PERSON_CLASSES = {"person"}
@@ -39,6 +40,7 @@ class VideoLabProcessor:
         on_progress: Callable[[dict], None] | None = None,
         on_preview: Callable[[bytes], None] | None = None,
         on_crossing: Callable[[dict], None] | None = None,
+        show_hud: bool = False,
     ) -> dict:
         import cv2
 
@@ -83,6 +85,7 @@ class VideoLabProcessor:
         crossing_counts = {"down": 0, "up": 0}
         crossing_keys: set[tuple[int, str]] = set()
         timestamp_qualities: set[str] = set()
+        track_records: dict[int, dict] = {}
 
         try:
             if is_webcam:
@@ -188,6 +191,61 @@ class VideoLabProcessor:
                     if track_id is None:
                         continue
 
+                    object_type = (
+                        "vehicle" if label in VEHICLE_CLASSES
+                        else "person" if label in PERSON_CLASSES
+                        else "other"
+                    )
+                    if object_type in {"vehicle", "person"}:
+                        record = track_records.setdefault(
+                            track_id,
+                            {
+                                "track_id": track_id,
+                                "object_type": object_type,
+                                "class_label": display_label,
+                                "first_frame_index": frame_index,
+                                "last_frame_index": frame_index,
+                                "first_seen_seconds": round(media_time, 3),
+                                "last_seen_seconds": round(media_time, 3),
+                                "frames_seen": 0,
+                                "confidence_sum": 0.0,
+                                "confidence_max": 0.0,
+                                "first_bbox": detection.box.model_dump(),
+                                "last_bbox": detection.box.model_dump(),
+                                "trajectory": [],
+                                "line_crossings": [],
+                                "_colour_votes": {},
+                                "_colour_confidence_sum": 0.0,
+                                "_colour_samples": 0,
+                            },
+                        )
+                        record["frames_seen"] += 1
+                        record["last_frame_index"] = frame_index
+                        record["last_seen_seconds"] = round(media_time, 3)
+                        record["confidence_sum"] += detection.confidence
+                        record["confidence_max"] = max(
+                            record["confidence_max"], detection.confidence
+                        )
+                        record["last_bbox"] = detection.box.model_dump()
+                        if frame_index % 3 == 0 and len(record["trajectory"]) < 240:
+                            record["trajectory"].append(
+                                {
+                                    "frame": frame_index,
+                                    "time": round(media_time, 3),
+                                    "x": round((detection.box.x1 + detection.box.x2) / 2, 1),
+                                    "y": round((detection.box.y1 + detection.box.y2) / 2, 1),
+                                }
+                            )
+                        if object_type == "vehicle" and frame_index % 10 == 0:
+                            colour, colour_confidence = estimate_vehicle_color(
+                                image, detection.box
+                            )
+                            if colour and colour_confidence >= 0.22:
+                                votes = record["_colour_votes"]
+                                votes[colour] = votes.get(colour, 0) + colour_confidence
+                                record["_colour_confidence_sum"] += colour_confidence
+                                record["_colour_samples"] += 1
+
                     current_by_class[label].add(track_id)
                     if label in VEHICLE_CLASSES:
                         unique_by_class[label].add(track_id)
@@ -208,6 +266,14 @@ class VideoLabProcessor:
                             if key not in crossing_keys:
                                 crossing_keys.add(key)
                                 crossing_counts[direction] += 1
+                                if track_id in track_records:
+                                    track_records[track_id]["line_crossings"].append(
+                                        {
+                                            "direction": direction,
+                                            "frame_index": frame_index,
+                                            "time_seconds": round(media_time, 3),
+                                        }
+                                    )
                                 if on_crossing is not None:
                                     on_crossing(
                                         {
@@ -234,17 +300,16 @@ class VideoLabProcessor:
                     unique_vehicle_tracks=len(unique_vehicle_keys),
                     unique_person_tracks=len(unique_person_ids),
                     crossing_counts=crossing_counts,
+                    show_hud=show_hud,
                 )
                 writer.write(annotated)
                 processed_frames += 1
 
-                if on_preview is not None and (
-                    processed_frames % 2 == 0 or processed_frames == 1
-                ):
+                if on_preview is not None:
                     ok, encoded = cv2.imencode(
                         ".jpg",
                         annotated,
-                        [int(cv2.IMWRITE_JPEG_QUALITY), 78],
+                        [int(cv2.IMWRITE_JPEG_QUALITY), 68],
                     )
                     if ok:
                         on_preview(encoded.tobytes())
@@ -282,6 +347,20 @@ class VideoLabProcessor:
                             "unique_vehicle_tracks": len(unique_vehicle_keys),
                             "unique_person_tracks": len(unique_person_ids),
                             "line_crossings": dict(crossing_counts),
+                            "current_tracks": [
+                                {
+                                    "track_id": item.track_id,
+                                    "class_label": display_label,
+                                    "object_type": (
+                                        "vehicle" if item.label.lower() in VEHICLE_CLASSES
+                                        else "person" if item.label.lower() in PERSON_CLASSES
+                                        else "other"
+                                    ),
+                                    "confidence": round(item.confidence, 3),
+                                }
+                                for item, display_label in display_detections
+                                if item.track_id is not None
+                            ],
                         }
                     )
                 frame_index += 1
@@ -309,6 +388,35 @@ class VideoLabProcessor:
             CLASS_LABELS.get(label, label.upper()): len(track_ids)
             for label, track_ids in unique_by_class.items()
         }
+        track_reports = []
+        for record in track_records.values():
+            colour_votes = record.pop("_colour_votes")
+            colour_total = sum(colour_votes.values())
+            if colour_total:
+                colour, winning_vote = max(colour_votes.items(), key=lambda item: item[1])
+                record["vehicle_color"] = colour
+                record["vehicle_color_confidence"] = round(
+                    winning_vote / max(1, record["_colour_samples"]), 3
+                )
+            else:
+                record["vehicle_color"] = None
+                record["vehicle_color_confidence"] = 0.0
+            colour_samples = record.pop("_colour_samples")
+            record.pop("_colour_confidence_sum")
+            record["make"] = None
+            record["model"] = None
+            record["make_model_status"] = "specialized_model_not_configured"
+            record["average_confidence"] = round(
+                record.pop("confidence_sum") / max(1, record["frames_seen"]), 3
+            )
+            record["confidence_max"] = round(record["confidence_max"], 3)
+            record["duration_seconds"] = round(
+                max(0.0, record["last_seen_seconds"] - record["first_seen_seconds"]), 3
+            )
+            record["vehicle_color_samples"] = colour_samples
+            track_reports.append(record)
+        track_reports.sort(key=lambda item: (item["first_seen_seconds"], item["track_id"]))
+
         result = {
             "frames_processed": processed_frames,
             "total_frames": total_frames,
@@ -327,6 +435,9 @@ class VideoLabProcessor:
             "output_height": frame_size[1] if frame_size else 0,
             "stopped_by_operator": bool(stop_event and stop_event.is_set()),
             "session_started_at": started_at.isoformat(),
+            "tracks": track_reports,
+            "track_reports_count": len(track_reports),
+            "vehicle_attribute_status": "estimated_colour_only_make_model_not_configured",
         }
         if on_progress is not None:
             on_progress(
@@ -341,6 +452,7 @@ class VideoLabProcessor:
                     "unique_vehicle_tracks": len(unique_vehicle_keys),
                     "unique_person_tracks": len(unique_person_ids),
                     "line_crossings": dict(crossing_counts),
+                    "current_tracks": [],
                 }
             )
         return result
@@ -359,113 +471,119 @@ class VideoLabProcessor:
         unique_vehicle_tracks,
         unique_person_tracks,
         crossing_counts,
+        show_hud=False,
     ):
         height, width = image.shape[:2]
-        green = (70, 255, 120)
-        dark = (15, 24, 28)
-        muted = (170, 190, 184)
-        cv2.line(image, (0, line_y), (width - 1, line_y), green, 2, cv2.LINE_AA)
+        vehicle_green = (74, 236, 126)
+        person_blue = (255, 142, 64)
+        muted = (196, 211, 218)
+        cv2.line(image, (0, line_y), (width - 1, line_y), (74, 210, 128), 1, cv2.LINE_AA)
 
         for detection, display_label in detections:
             box = detection.box
-            x1, y1 = int(box.x1), int(box.y1)
-            x2, y2 = int(box.x2), int(box.y2)
-            cv2.rectangle(image, (x1, y1), (x2, y2), green, 2, cv2.LINE_AA)
-            corner = max(8, min(x2 - x1, y2 - y1) // 5)
+            x1 = max(0, min(width - 1, int(box.x1)))
+            y1 = max(0, min(height - 1, int(box.y1)))
+            x2 = max(x1 + 1, min(width - 1, int(box.x2)))
+            y2 = max(y1 + 1, min(height - 1, int(box.y2)))
+            is_person = display_label == "PERSON"
+            accent = person_blue if is_person else vehicle_green
+            cv2.rectangle(image, (x1, y1), (x2, y2), accent, 2, cv2.LINE_AA)
+
+            corner = max(5, min(x2 - x1, y2 - y1) // 7)
             for x, y, sx, sy in (
                 (x1, y1, 1, 1),
                 (x2, y1, -1, 1),
                 (x1, y2, 1, -1),
                 (x2, y2, -1, -1),
             ):
-                cv2.line(image, (x, y), (x + sx * corner, y), green, 4, cv2.LINE_AA)
-                cv2.line(image, (x, y), (x, y + sy * corner), green, 4, cv2.LINE_AA)
+                cv2.line(image, (x, y), (x + sx * corner, y), accent, 2, cv2.LINE_AA)
+                cv2.line(image, (x, y), (x, y + sy * corner), accent, 2, cv2.LINE_AA)
 
-            identity = (
-                f"ID {detection.track_id:04d}"
-                if detection.track_id is not None
-                else "UNTRACKED"
+            identity = f"#{detection.track_id}" if detection.track_id is not None else "#—"
+            label = "PERSON" if is_person else display_label
+            text = f"{identity}  {label}"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            scale = 0.34
+            thickness = 1
+            (text_width, text_height), baseline = cv2.getTextSize(
+                text, font, scale, thickness
             )
-            text = f"{identity} | {display_label} | {detection.confidence:.0%}"
-            (text_width, text_height), _ = cv2.getTextSize(
-                text, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 1
-            )
-            label_top = max(0, y1 - text_height - 12)
+            pad_x, pad_y = 4, 3
+            pill_width = min(width - 1, text_width + pad_x * 2)
+            label_left = min(max(0, x1), max(0, width - pill_width - 1))
+            label_top = y1 - text_height - baseline - pad_y * 2 - 2
+            if label_top < 0:
+                label_top = min(height - text_height - baseline - pad_y * 2, y1 + 2)
+            label_right = min(width - 1, label_left + pill_width)
+            label_bottom = min(height - 1, label_top + text_height + baseline + pad_y * 2)
+            overlay = image.copy()
             cv2.rectangle(
-                image,
-                (x1, label_top),
-                (min(width - 1, x1 + text_width + 10), y1),
-                green,
+                overlay,
+                (label_left, label_top),
+                (label_right, label_bottom),
+                accent,
                 -1,
             )
+            cv2.addWeighted(overlay, 0.72, image, 0.28, 0, image)
             cv2.putText(
                 image,
                 text,
-                (x1 + 5, y1 - 6),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.48,
-                dark,
-                1,
+                (label_left + pad_x, label_top + text_height + pad_y),
+                font,
+                scale,
+                (8, 20, 20),
+                thickness,
                 cv2.LINE_AA,
             )
+
             foot = ((x1 + x2) // 2, y2)
-            cv2.circle(image, foot, 4, green, -1, cv2.LINE_AA)
+            cv2.circle(image, foot, 3, accent, -1, cv2.LINE_AA)
             if detection.track_id is not None:
                 trail = list(trails.get(detection.track_id, []))
                 for index in range(1, len(trail)):
-                    cv2.line(image, trail[index - 1], trail[index], green, 2, cv2.LINE_AA)
+                    cv2.line(
+                        image,
+                        trail[index - 1],
+                        trail[index],
+                        accent,
+                        1,
+                        cv2.LINE_AA,
+                    )
 
-        overlay = image.copy()
-        cv2.rectangle(overlay, (12, 12), (min(width - 12, 365), 118), dark, -1)
-        cv2.addWeighted(overlay, 0.78, image, 0.22, 0, image)
-        cv2.putText(
-            image,
-            "TRAFFIC RADAR / SINGLE CAMERA LAB",
-            (24, 37),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            green,
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            image,
-            f"FRAME {frame_index + 1:06d}   SOURCE {fps_source:.1f} FPS",
-            (24, 62),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.43,
-            muted,
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            image,
-            f"VEHICLES {unique_vehicle_tracks}   PEOPLE {unique_person_tracks}",
-            (24, 86),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            green,
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            image,
-            f"LINE DOWN {crossing_counts['down']}   UP {crossing_counts['up']}",
-            (24, 107),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.43,
-            muted,
-            1,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            image,
-            f"AI {processing_fps:.1f} FPS",
-            (max(12, width - 150), 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            green,
-            1,
-            cv2.LINE_AA,
-        )
+        if show_hud:
+            hud_width = min(178, max(130, width // 6))
+            hud_height = 58
+            overlay = image.copy()
+            cv2.rectangle(overlay, (10, 10), (10 + hud_width, 10 + hud_height), (9, 20, 26), -1)
+            cv2.addWeighted(overlay, 0.34, image, 0.66, 0, image)
+            cv2.putText(
+                image,
+                "TRAFFIC / LIVE",
+                (17, 25),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.34,
+                vehicle_green,
+                1,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                image,
+                f"FRAME {frame_index + 1}  {processing_fps:.1f} FPS",
+                (17, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.30,
+                muted,
+                1,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                image,
+                f"VEH {unique_vehicle_tracks}  PPL {unique_person_tracks}",
+                (17, 54),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.30,
+                muted,
+                1,
+                cv2.LINE_AA,
+            )
         return image

@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import re
 from datetime import UTC, datetime
@@ -15,7 +16,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from traffic_surveillance.api.auth import require_api_key
@@ -58,7 +59,8 @@ class LiveLabRequest(BaseModel):
     tracker: str = "bytetrack.yaml"
     confidence: float = Field(default=0.25, ge=0.05, le=0.95)
     line_position: float = Field(default=0.65, ge=0.1, le=0.9)
-    max_width: int = Field(default=1280)
+    max_width: int = Field(default=960)
+    show_hud: bool = False
 
 
 def _supported_environment() -> tuple[bool, list[str]]:
@@ -110,6 +112,7 @@ def _run_job(
     line_position: float,
     max_width: int,
     live_duration_seconds: int | None,
+    show_hud: bool,
 ) -> None:
     manager: LabJobManager = runtime_state.lab_jobs
     stop_event = manager.stop_event(job_id)
@@ -157,29 +160,57 @@ def _run_job(
             max_width=max_width,
             live_duration_seconds=live_duration_seconds,
             stop_event=stop_event,
+            show_hud=show_hud,
             on_progress=lambda values: manager.update(job_id, **values),
             on_preview=lambda jpeg: manager.set_preview(job_id, jpeg),
             on_crossing=on_crossing,
         )
         final_status = "stopped" if summary["stopped_by_operator"] else "completed"
+        finished_at = datetime.now(UTC).isoformat()
         manager.update(
             job_id,
             status=final_status,
             progress=100.0,
             result=summary,
             video_url=f"/api/v1/lab/jobs/{job_id}/video",
-            finished_at=datetime.now(UTC).isoformat(),
+            finished_at=finished_at,
+        )
+        record = manager.get(job_id) or {}
+        runtime_state.event_store.save_lab_report(
+            session_id=job_id,
+            source_type=record.get("source_type", "unknown"),
+            source_label=record.get("source_label", "Unknown source"),
+            filename=record.get("filename", "unknown"),
+            status=final_status,
+            started_at=record.get("started_at"),
+            finished_at=finished_at,
+            summary=summary,
+            tracks=summary.get("tracks", []),
         )
     except Exception as exc:
         # Avoid exposing an RTSP URL (which may contain credentials) in the public job record.
+        finished_at = datetime.now(UTC).isoformat()
+        message = (
+            f"{type(exc).__name__}: processing failed. Check the model download, "
+            "video codec, RTSP permissions and server logs."
+        )
         manager.update(
             job_id,
             status="failed",
-            error=(
-                f"{type(exc).__name__}: processing failed. Check the model download, "
-                "video codec, RTSP permissions and server logs."
-            ),
-            finished_at=datetime.now(UTC).isoformat(),
+            error=message,
+            finished_at=finished_at,
+        )
+        record = manager.get(job_id) or {}
+        runtime_state.event_store.save_lab_report(
+            session_id=job_id,
+            source_type=record.get("source_type", "unknown"),
+            source_label=record.get("source_label", "Unknown source"),
+            filename=record.get("filename", "unknown"),
+            status="failed",
+            started_at=record.get("started_at"),
+            finished_at=finished_at,
+            summary={"error": message},
+            tracks=[],
         )
 
 
@@ -202,6 +233,11 @@ async def capabilities(request: Request) -> dict:
         "model_will_download_on_first_use": model_alias and not model_path.is_file(),
         "recommended_trackers": sorted(ALLOWED_TRACKERS),
         "max_upload_mb": settings.max_upload_mb,
+        "preview_transport": "mjpeg_stream",
+        "vehicle_colour": "estimated_from_track_frames",
+        "make_model_recognition": (
+            "not_configured_requires_fine_grained_vehicle_classifier"
+        ),
         "phone_streaming": {
             "media_gateway": "MediaMTX",
             "recommended_mobile_publish": "WebRTC/WHIP",
@@ -224,7 +260,8 @@ async def create_video_job(
     tracker: str = Form(default="bytetrack.yaml"),
     confidence: float = Form(default=0.25, ge=0.05, le=0.95),
     line_position: float = Form(default=0.65, ge=0.1, le=0.9),
-    max_width: int = Form(default=1280),
+    max_width: int = Form(default=960),
+    show_hud: bool = Form(default=False),
 ) -> dict:
     _validate_tracker(tracker)
     if max_width not in {960, 1280, 1920}:
@@ -279,6 +316,7 @@ async def create_video_job(
             "confidence": confidence,
             "line_position": line_position,
             "max_width": max_width,
+            "show_hud": show_hud,
             "size_bytes": size,
         },
     )
@@ -294,6 +332,7 @@ async def create_video_job(
         line_position=line_position,
         max_width=max_width,
         live_duration_seconds=None,
+        show_hud=show_hud,
     )
     return manager.get(job_id)
 
@@ -319,6 +358,7 @@ async def create_live_job(
             "line_position": payload.line_position,
             "max_width": payload.max_width,
             "duration_seconds": payload.duration_seconds,
+            "show_hud": payload.show_hud,
         },
     )
     output_path = Path(request.app.state.settings.lab_storage_dir) / "results" / f"{job_id}.mp4"
@@ -334,6 +374,7 @@ async def create_live_job(
         line_position=payload.line_position,
         max_width=payload.max_width,
         live_duration_seconds=payload.duration_seconds,
+        show_hud=payload.show_hud,
     )
     return manager.get(job_id)
 
@@ -360,6 +401,67 @@ async def get_job_preview(job_id: str, request: Request) -> Response:
         headers={"Cache-Control": "no-store", "X-Preview-Version": str(version)},
     )
 
+
+
+
+@router.get("/jobs/{job_id}/preview.mjpg")
+async def get_job_preview_stream(job_id: str, request: Request) -> StreamingResponse:
+    manager = request.app.state.lab_jobs
+    if manager.get(job_id) is None:
+        raise HTTPException(status_code=404, detail="Laboratory job not found.")
+
+    async def frame_generator():
+        version = 0
+        while True:
+            if await request.is_disconnected():
+                break
+            preview = await asyncio.to_thread(
+                manager.wait_for_preview, job_id, version, 12.0
+            )
+            if preview is None:
+                job = manager.get(job_id)
+                if job is None or job.get("status") in {"completed", "stopped", "failed"}:
+                    break
+                continue
+            version, jpeg = preview
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                + f"Content-Length: {len(jpeg)}\r\n\r\n".encode("ascii")
+                + jpeg
+                + b"\r\n"
+            )
+
+    return StreamingResponse(
+        frame_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-store, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@router.get("/reports")
+async def list_lab_reports(request: Request, limit: int = 50) -> list[dict]:
+    return request.app.state.event_store.list_lab_reports(limit=limit)
+
+
+@router.get("/reports/{session_id}")
+async def get_lab_report(session_id: str, request: Request) -> dict:
+    report = request.app.state.event_store.get_lab_report(session_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Laboratory report not found.")
+    return report
+
+
+@router.get("/reports/{session_id}/tracks")
+async def get_lab_track_reports(session_id: str, request: Request) -> list[dict]:
+    report = request.app.state.event_store.get_lab_report(session_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Laboratory report not found.")
+    return request.app.state.event_store.get_lab_tracks(session_id)
 
 @router.get("/jobs/{job_id}/video")
 async def get_job_video(job_id: str, request: Request) -> FileResponse:

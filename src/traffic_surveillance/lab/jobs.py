@@ -1,6 +1,6 @@
 from copy import deepcopy
 from datetime import UTC, datetime
-from threading import Event, RLock
+from threading import Condition, Event, RLock
 from uuid import uuid4
 
 
@@ -10,6 +10,7 @@ class LabJobManager:
     def __init__(self, max_jobs: int = 20) -> None:
         self.max_jobs = max_jobs
         self._lock = RLock()
+        self._changed = Condition(self._lock)
         self._jobs: dict[str, dict] = {}
         self._stop_events: dict[str, Event] = {}
         self._previews: dict[str, tuple[int, bytes]] = {}
@@ -58,9 +59,10 @@ class LabJobManager:
         return job_id
 
     def update(self, job_id: str, **changes) -> None:
-        with self._lock:
+        with self._changed:
             if job_id in self._jobs:
                 self._jobs[job_id].update(changes)
+                self._changed.notify_all()
 
     def get(self, job_id: str) -> dict | None:
         with self._lock:
@@ -86,12 +88,35 @@ class LabJobManager:
             return True
 
     def set_preview(self, job_id: str, jpeg: bytes) -> None:
-        with self._lock:
+        with self._changed:
             if job_id not in self._jobs:
                 return
             version = self._previews.get(job_id, (0, b""))[0] + 1
             self._previews[job_id] = (version, jpeg)
+            self._changed.notify_all()
 
     def get_preview(self, job_id: str) -> tuple[int, bytes] | None:
         with self._lock:
             return self._previews.get(job_id)
+
+
+    def wait_for_preview(
+        self,
+        job_id: str,
+        after_version: int,
+        timeout: float = 15.0,
+    ) -> tuple[int, bytes] | None:
+        terminal = {"completed", "stopped", "failed"}
+        with self._changed:
+            self._changed.wait_for(
+                lambda: (
+                    self._previews.get(job_id, (0, b""))[0] > after_version
+                    or self._jobs.get(job_id, {}).get("status") in terminal
+                    or job_id not in self._jobs
+                ),
+                timeout=timeout,
+            )
+            preview = self._previews.get(job_id)
+            if preview is not None and preview[0] > after_version:
+                return preview
+            return None
