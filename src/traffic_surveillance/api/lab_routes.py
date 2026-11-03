@@ -127,6 +127,7 @@ def _run_job(
             runtime_state.settings.model_path,
             tracker=tracker,
             confidence=confidence,
+            vehicle_model_path=runtime_state.settings.vehicle_model_path,
         )
         processor = VideoLabProcessor(detector)
 
@@ -235,8 +236,12 @@ async def capabilities(request: Request) -> dict:
         "max_upload_mb": settings.max_upload_mb,
         "preview_transport": "mjpeg_stream",
         "vehicle_colour": "estimated_from_track_frames",
+        "vehicle_make_model_configured": bool(
+            settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file()
+        ),
         "make_model_recognition": (
-            "not_configured_requires_fine_grained_vehicle_classifier"
+            "ready" if settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file()
+            else "not_configured_requires_fine_grained_vehicle_classifier"
         ),
         "phone_streaming": {
             "media_gateway": "MediaMTX",

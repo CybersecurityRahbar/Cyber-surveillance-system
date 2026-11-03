@@ -15,6 +15,7 @@ class UltralyticsTrackingBackend:
         tracker: str = "bytetrack.yaml",
         confidence: float = 0.25,
         device: str | None = None,
+        vehicle_model_path: str | Path | None = None,
     ) -> None:
         try:
             from ultralytics import YOLO
@@ -32,6 +33,18 @@ class UltralyticsTrackingBackend:
             )
 
         self._model = YOLO(model_source)
+        self._vehicle_classifier = None
+        if vehicle_model_path:
+            classifier_path = Path(vehicle_model_path)
+            if not classifier_path.is_file():
+                raise FileNotFoundError(
+                    f"Vehicle make/model classifier not found: {classifier_path}"
+                )
+            self._vehicle_classifier = YOLO(str(classifier_path))
+            if getattr(self._vehicle_classifier, "task", None) != "classify":
+                raise ValueError(
+                    "Vehicle model weights must be an Ultralytics classification model."
+                )
         self._tracker = tracker
         self._confidence = confidence
         if device is None:
@@ -85,3 +98,33 @@ class UltralyticsTrackingBackend:
                 )
             )
         return detections
+
+
+    def classify_vehicle(self, frame, box) -> dict | None:
+        """Run an optional user-supplied fine-grained vehicle classifier on a crop."""
+
+        if self._vehicle_classifier is None:
+            return None
+        height, width = frame.shape[:2]
+        x1 = max(0, min(width - 1, int(box.x1)))
+        y1 = max(0, min(height - 1, int(box.y1)))
+        x2 = max(x1 + 1, min(width, int(box.x2)))
+        y2 = max(y1 + 1, min(height, int(box.y2)))
+        crop = frame[y1:y2, x1:x2]
+        if crop.size == 0:
+            return None
+        results = self._vehicle_classifier.predict(
+            source=crop,
+            imgsz=224,
+            device=self._device,
+            half=self._half,
+            verbose=False,
+        )
+        if not results or results[0].probs is None:
+            return None
+        probabilities = results[0].probs
+        class_id = int(probabilities.top1)
+        confidence = float(probabilities.top1conf.item())
+        names = self._vehicle_classifier.names
+        label = str(names[class_id]) if isinstance(names, dict) else str(names[class_id])
+        return {"label": label, "confidence": confidence}

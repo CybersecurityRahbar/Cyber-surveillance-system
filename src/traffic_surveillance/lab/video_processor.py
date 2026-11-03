@@ -217,6 +217,8 @@ class VideoLabProcessor:
                                 "_colour_votes": {},
                                 "_colour_confidence_sum": 0.0,
                                 "_colour_samples": 0,
+                                "_make_model_votes": {},
+                                "_make_model_samples": 0,
                             },
                         )
                         record["frames_seen"] += 1
@@ -245,6 +247,23 @@ class VideoLabProcessor:
                                 votes[colour] = votes.get(colour, 0) + colour_confidence
                                 record["_colour_confidence_sum"] += colour_confidence
                                 record["_colour_samples"] += 1
+
+                        if (
+                            object_type == "vehicle"
+                            and frame_index % 15 == 0
+                            and record.get("_make_model_samples", 0) < 5
+                        ):
+                            classifier = getattr(self.detector, "classify_vehicle", None)
+                            prediction = classifier(image, detection.box) if callable(classifier) else None
+                            if prediction and prediction.get("confidence", 0.0) >= 0.45:
+                                votes = record.setdefault("_make_model_votes", {})
+                                name = str(prediction["label"])
+                                votes[name] = votes.get(name, 0.0) + float(
+                                    prediction["confidence"]
+                                )
+                                record["_make_model_samples"] = (
+                                    record.get("_make_model_samples", 0) + 1
+                                )
 
                     current_by_class[label].add(track_id)
                     if label in VEHICLE_CLASSES:
@@ -403,9 +422,27 @@ class VideoLabProcessor:
                 record["vehicle_color_confidence"] = 0.0
             colour_samples = record.pop("_colour_samples")
             record.pop("_colour_confidence_sum")
-            record["make"] = None
-            record["model"] = None
-            record["make_model_status"] = "specialized_model_not_configured"
+            model_votes = record.pop("_make_model_votes", {})
+            model_total = sum(model_votes.values())
+            if model_total:
+                model_label, model_score = max(
+                    model_votes.items(), key=lambda item: item[1]
+                )
+                parts = model_label.replace("_", " ").replace("-", " ").split()
+                record["make"] = parts[0] if parts else None
+                record["model"] = " ".join(parts[1:]) if len(parts) > 1 else None
+                record["make_model"] = model_label
+                record["make_model_confidence"] = round(
+                    model_score / max(1, record.pop("_make_model_samples", 1)), 3
+                )
+                record["make_model_status"] = "classified_by_configured_model"
+            else:
+                record["make"] = None
+                record["model"] = None
+                record["make_model"] = None
+                record["make_model_confidence"] = 0.0
+                record["make_model_status"] = "model_not_configured_or_no_confident_result"
+                record.pop("_make_model_samples", None)
             record["average_confidence"] = round(
                 record.pop("confidence_sum") / max(1, record["frames_seen"]), 3
             )
