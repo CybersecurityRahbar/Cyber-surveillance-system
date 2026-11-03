@@ -297,3 +297,128 @@ input[type=range] { width: 100%; margin: 8px 0 0; accent-color: var(--mint); cur
   .field-grid, .inline-fields { grid-template-columns: 1fr; }
   .report-footer, .app-footer { flex-direction: column; }
 }
+
+
+/* Readable blue-first operations theme: tune all former micro-labels for desktop viewing. */
+:root {
+  --bg: #061226;
+  --bg-soft: #091a32;
+  --sidebar: #07172d;
+  --panel: rgba(12, 31, 57, .96);
+  --panel-2: #10294a;
+  --line: rgba(107, 160, 220, .20);
+  --line-strong: rgba(115, 174, 238, .34);
+  --text: #f0f6ff;
+  --muted: #a2b7d2;
+  --muted-2: #7e96b5;
+  --mint: #42dfa7;
+  --mint-soft: rgba(66, 223, 167, .14);
+  --blue: #4b9bff;
+  --amber: #ffc56f;
+  --violet: #b9a7ff;
+}
+body { font-size: 15px; }
+.brand-copy small, .sidebar-foot, .engine-meta, .workspace-label,
+.crumbs, .api-key, .connection-pill { font-size: 11px; }
+.nav-item { min-height: 49px; font-size: 14px; }
+.nav-item b, .nav-item i { font-size: 10px; }
+.workspace-label { font-size: 12px; }
+.engine-card-head b { font-size: 14px; }
+.engine-card-head small { font-size: 11px; }
+.topbar { min-height: 78px; }
+.api-key input { font-size: 13px; width: 175px; }
+.connection-pill { font-size: 12px; }
+.hero h1 { font-size: clamp(29px, 3vw, 40px); }
+.hero p { font-size: 15px; line-height: 1.9; }
+.eyebrow { font-size: 11px; letter-spacing: 1px; }
+.hero-state b { font-size: 14px; }
+.hero-state small { font-size: 12px; }
+.top-metric { padding: 17px; gap: 13px; }
+.top-metric small { font-size: 13px; }
+.top-metric strong { font-size: 29px; }
+.top-metric em { font-size: 11px; }
+.panel { border-color: rgba(104, 157, 218, .22); }
+.panel-heading h2 { font-size: 18px; }
+.panel-heading p { font-size: 12px; }
+.heading-index, .heading-tag, .live-badge { font-size: 11px; }
+.mode { font-size: 14px; min-height: 43px; }
+.drop-zone strong { font-size: 16px; }
+.drop-zone small, .file-formats, .selected-file { font-size: 12px; }
+.field-label, .settings-heading, .field-grid label > span,
+.inline-fields label > span, .range-field label,
+.toggle-row b { font-size: 13px; }
+.text-input, .field-grid select, .inline-fields select,
+.api-key input, .history-select { font-size: 13px; min-height: 40px; }
+.hint, .secure-note, .toggle-row small { font-size: 12px; line-height: 1.8; }
+.primary-button, .stop-button, .secondary-button { font-size: 14px; min-height: 43px; }
+.primary-button {
+  color: #ffffff;
+  background: linear-gradient(120deg, #2469cb, #398eea);
+  border-color: rgba(111, 177, 255, .48);
+  box-shadow: 0 9px 26px rgba(25, 104, 212, .20);
+}
+.primary-button:hover { background: linear-gradient(120deg, #2f7ce0, #55a4ff); }
+.mode.active { color: #d9eaff; background: rgba(65, 139, 233, .18); border-color: rgba(82, 155, 245, .42); }
+.mode.active span { color: var(--blue); }
+.monitor-frame { min-height: 390px; background: #020b18; border-color: rgba(81, 146, 222, .23); }
+.monitor-frame img, .monitor-frame video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; background: #020914;
+}
+.monitor-frame:fullscreen {
+  width: 100vw; height: 100vh; min-height: 100vh;
+  border: 0; border-radius: 0; background: #020914;
+}
+.monitor-frame:fullscreen img, .monitor-frame:fullscreen video {
+  width: 100vw; height: 100vh; object-fit: contain;
+}
+.monitor-placeholder strong { font-size: 16px; }
+.monitor-placeholder small { font-size: 12px; }
+.monitor-actions { display: flex; align-items: center; gap: 8px; margin-right: auto; }
+.secondary-button {
+  padding: 8px 12px; color: #d7e9ff;
+  background: rgba(49, 113, 194, .16);
+  border: 1px solid rgba(103, 167, 241, .30);
+  border-radius: 8px; cursor: pointer;
+}
+.secondary-button:hover { background: rgba(49, 135, 235, .25); }
+.analysis-mode-note {
+  position: absolute; z-index: 4; bottom: 15px; right: 15px; left: 15px;
+  padding: 10px 13px; border-radius: 8px;
+  color: #dcecff; background: rgba(4, 18, 37, .76);
+  border: 1px solid rgba(91, 154, 228, .25);
+  font-size: 12px; text-align: center;
+}
+.progress-info, .progress-meta { font-size: 12px; }
+.progress-meta { flex-wrap: wrap; gap: 10px; }
+.live-track-card { padding: 11px 12px; }
+.live-track-info b { font-size: 14px; }
+.live-track-info small { font-size: 11px; }
+.track-confidence, .track-token { font-size: 12px; }
+.attribute-row > span, .attribute-row > b { font-size: 13px; }
+.attribute-footnote { font-size: 12px; }
+.class-pill, .class-pill b { font-size: 11px; }
+.track-table th { font-size: 12px; padding: 13px 14px; }
+.track-table td { font-size: 12px; padding: 12px 14px; }
+.object-chip { font-size: 11px; }
+.export-link { font-size: 12px; }
+.report-footer { font-size: 11px; }
+.history-select {
+  max-width: 360px; min-width: 220px; padding: 8px 10px;
+  color: var(--text); background: #0a1e39;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+}
+.report-actions { flex-wrap: wrap; align-items: center; }
+.result-title b, .result-title a { font-size: 13px; }
+.app-footer { font-size: 10px; }
+@media (max-width: 1060px) {
+  .monitor-frame { min-height: 330px; }
+}
+@media (max-width: 760px) {
+  .monitor-actions { flex-wrap: wrap; width: 100%; }
+  .monitor-heading { flex-wrap: wrap; }
+  .history-select { max-width: 100%; min-width: 0; width: 100%; }
+  .monitor-frame { min-height: 250px; }
+  .top-metric small { font-size: 12px; }
+  .top-metric em { font-size: 10px; }
+}
