@@ -1164,3 +1164,110 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
   - لم تُختبر أوزان ماركة/طراز فعلية؛ hook يعمل فقط مع ملف Ultralytics task=classify مناسب. لم تُرفق أي أوزان أو بيانات تدريب باسم Toyota Hilux / Hyundai Tucson / Mercedes G-Class.
   - تقدير اللون HSV heuristic تقريبي وليس مصنفاً مدرباً، وقد يتأثر بالظلال/الإضاءة والجزء الظاهر من المركبة.
 - يجب أن يفتح المستخدم دفتر Colab المحدث، ينفذ الخلايا من البداية، ويختبر فيديو واقعي قصير. عندها نحتاج قياس processing_fps ومعدل تحديث الرادار وتأخر المعاينة، ومقارنة العد/التتبع يدوياً.
+
+
+### 21.19 — مراجعة شاملة وإصلاح أخطاء التكامل والبناء (2026-11-03)
+
+#### طلب المستخدم في هذه الجولة
+
+- طلب المستخدم استكمال خطة التطوير السابقة دون إعادة العمل من الصفر، مع مراجعة الحالة الفعلية للمستودع، إصلاح الأخطاء، التحقق من CI وبناء تطبيق Android، وتحديث ملف السياق تراكميّاً.
+- المستودع بقي على الفرع `main`، ولم تُنشأ فروع جانبية.
+- نقطة البداية التي تمت مراجعتها كانت الالتزام `dc8add0483029777c6ac6110bb2ca20fb17fad0e`.
+
+#### مراجعة الحالة والأخطاء التي ظهرت
+
+- راجعنا ملفات المعالجة والتتبع والسمات، واجهات API، SQLite، تطبيق Android، دفتر Colab، إعدادات التتبع، الاختبارات وسجل GitHub Actions.
+- فشل Python CI في البداية بسبب مشكلتين في `src/traffic_surveillance/vision/vehicle_attributes.py`:
+  - ترتيب import غير متوافق مع Ruff.
+  - وجود مفتاح `model` مكرر في قاموس بيانات السيارة، ما كان يستبدل اسم طراز السيارة بمسار مستودع النموذج.
+- ظهر خلل تقريري إضافي في عداد عينات make/model؛ كان يُستهلك بالقيمة `pop` مرتين، فتُحفظ قيمة العينات النهائية صفراً.
+- تبيّن أن عد المركبات كان يجمع الزوج `(class_label, track_id)`؛ إذا تقلب تصنيف المسار الواحد بين car وtruck أمكن أن يدخل في عدد المركبات الفريدة أكثر من مرة.
+- تبين أن معدل الإطارات المفترض لبث الهاتف كان 15 FPS بينما تطبيق Android يرسل إطاراً كل 100ms، أي 10 FPS مستهدفة.
+- فشل Android workflow أولاً لأن إعداد SDK كان يحاول تثبيت الحزمة القديمة `tools` التي لم تعد متاحة. وبعد إصلاح تلك الخطوة ظهر خطأ Kotlin في استيراد `YuvImage` واستخدام `singleLine`.
+- كشف اختبار API توقعاً قديماً بأن مسار الهاتف يستخدم MediaMTX، بينما تنفيذ MVP الفعلي هو WebSocket/JPEG مباشرة؛ تم تصحيح الاختبار حتى يعكس البروتوكول المنفذ ولا ينسب MediaMTX إلى المسار الحالي.
+
+#### التعديلات المطبقة على main
+
+- `e3d778e489d0ee5a1ee95a2c80cfc0e509466f4a`:
+  - إصلاح ترتيب imports في مصنف السمات.
+  - تغيير المفتاح المتكرر إلى `model_repository` للحفاظ على قيمة `model` الخاصة بموديل السيارة.
+- `825b0fc2312781fd3fc70b762b71f7f84619ff87`:
+  - تغيير عدّاد المركبات الفريدة ليعتمد على Track ID بدلاً من الزوج (الفئة، المعرّف).
+  - تصحيح معدل المصدر الافتراضي لبث الهاتف إلى 10 FPS.
+  - الحفاظ على metadata المنظمة للماركة والموديل والسنة عند عودة توقع TwinCar.
+  - إصلاح احتساب عدد عينات make/model وتقرير حالة السمات وفق نتائج المسارات.
+- `99aee5bf7eeac6016d4b623882faffabf9578de5`:
+  - تحديث capability response لتمييز المصنفات الاختيارية المفعلة.
+  - إظهار أن ناشر Android الأولي موجود بوصفه نموذجاً أولياً يتطلب بقاء Activity ظاهرة.
+- `cc610382608722688fbe47105d89b98e8c0bd99f`:
+  - إضافة اختبار يبدّل تسمية نفس Track ID بين car وtruck للتحقق من أن إجمالي المركبات الفريدة لا يتضاعف.
+- `4f2439ebd6f9b8d819ab82d5cb41edc5d5abd6ac`:
+  - تحديث اختبار capabilities الخاص ببث الهاتف.
+- `93aa473fde89fa104100d8bcb8109bac39c92852`:
+  - إصلاح Android workflow لإزالة الاعتماد على حزمة SDK القديمة.
+- `5e8f55d346a31c800d30cd4d2c9659e58ac2ebf9`:
+  - إضافة اختبار مصغر يختبر بقاء بيانات make/model/year واسم مستودع النموذج مستقلة، دون تحميل أوزان فعلية.
+- `1bda0b52b16fe1b87fc6afdc8d57c0dec014938e`:
+  - تنسيق fixtures في اختبار vehicle attributes لتتوافق مع Ruff.
+- `9f94e03cb0842c7f7873008640a81974c2e1ffb3`:
+  - تحديث إعداد Android SDK إلى `android-actions/setup-android@v4` مع تثبيت platform-tools، ثم تثبيت Android 36 وBuild Tools 36.0.0 صراحةً.
+- `b03f9ac0c26bd021a4dddb35d8f45fcfef38db76`:
+  - إزالة توقع MediaMTX القديم من اختبار API؛ الـMVP يرسل JPEG مباشرة عبر WebSocket.
+- `a37a42c89ec8340340318848fffeae61577b9660`:
+  - إصلاح استيراد `YuvImage` إلى `android.graphics.YuvImage`.
+  - استبدال خاصية Kotlin غير المتاحة `singleLine` باستدعاء `setSingleLine(true)`.
+- `695a4501f0cd388b943b91728828bdf6e167e716`:
+  - توضيح متطلبات النقل المحلي والإنترنت في README لتطبيق الهاتف.
+- `e9e2a7d75c328a567e95a39e1f75537bd5c1e9b7`:
+  - تصحيح وثيقة تدفق الهاتف حتى تفرق بين نموذج Android الحالي (CameraX + JPEG/WebSocket) والبنية المستقبلية المقترحة (H.264 + WebRTC/WHIP + MediaMTX).
+
+#### نتائج التحقق المسجلة
+
+- Python CI على الالتزام `e9e2a7d75c328a567e95a39e1f75537bd5c1e9b7`:
+  - Run ID: `41711334780`.
+  - الحالة: success.
+  - Ruff: success.
+  - JavaScript syntax: success.
+  - Notebook JSON validation: success.
+  - Pytest: `19 passed, 1 warning in 1.94s`.
+  - رابط التشغيل: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41711334780
+- Android workflow على الالتزام `a37a42c89ec8340340318848fffeae61577b9660`:
+  - Run ID: `41711189528`.
+  - الحالة: success.
+  - إعداد Android SDK وتثبيت platform/build tools: success.
+  - `:app:assembleDebug`: success.
+  - رفع APK كـ GitHub Actions artifact: success.
+  - رابط التشغيل الذي يحتوي artifact: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41711189528
+- Android workflow على الالتزام `695a4501f0cd388b943b91728828bdf6e167e716` (تعديلات README فقط فوق كود Android الذي تم بناؤه):
+  - Run ID: `41711234858`.
+  - الحالة: success، وبناء Debug APK ورفع artifact: success.
+  - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41711234858
+- ظهر تحذير واحد في Python test output من Starlette/TestClient بشأن استخدام httpx مستقبلاً؛ لا يفشل الاختبارات، ولم نغير الاعتماديات بسبب هذا التحذير.
+- ظهرت تحذيرات deprecation لبعض GitHub Actions/Gradle APIs، لكنها لم تمنع CI أو APK build.
+
+#### وضع الميزات بعد هذه الجولة — ما هو فعلي وما لم يثبت
+
+- أصبح لدينا نجاح مؤكد لاختبارات Python والـAPI وRuff وJS syntax وNotebook JSON.
+- أصبح لدينا بناء APK Debug ناجح في GitHub Actions مع artifact قابل للتنزيل من صفحة الـworkflow. نجاح البناء لا يعني أن التطبيق اختُبر على هاتف حقيقي.
+- نموذج Android الحالي MVP: CameraX، معاينة ظاهرة، بدء/إيقاف، JPEG عبر WebSocket، مفتاح API، وحد إرسال مستهدف 10 FPS. ما زال يحتاج اختباراً على جهاز Android حقيقي.
+- الخادم يحتفظ بأحدث JPEG فقط في buffer بحجم إطار واحد ويحسب الإطارات المستلمة/المسقطة؛ لا تتكون طوابير متراكمة في ingress الخاص بالهاتف.
+- تطبيق Android الحالي ليس بعد تطبيق بث إنتاجياً: لا توجد foreground camera service ولا H.264/WebRTC publisher ولا adaptive bitrate. يحتاج أن يبقى ظاهراً أثناء البث.
+- USB المباشر/ADB من الهاتف إلى Google Colab غير متاح؛ USB tethering وسيلة شبكة فقط، والجسر المباشر يتطلب خادم Python على الكمبيوتر المتصل.
+- متطلبات النقل المحلي تم توضيحها: إعداد Android الحالي لا يتيح cleartext traffic في Manifest؛ لذلك لا ينبغي اعتبار WS غير المشفر على Wi-Fi مساراً مضموناً. استخدم HTTPS/WSS مع شهادة موثوقة حالياً، أو أضف إعداد شبكة محلياً مدروساً لاحقاً بدلاً من فتح cleartext على نحو عام.
+- مسار MediaMTX/WebRTC/H.264 في وثيقة الهاتف هو تصميم مستقبلي منفصل عن MVP الحالي، وليس جزءاً من المسار الذي اجتاز APK build.
+- تقارير SQLite الدائمة وواجهات استعراض التقارير متاحة في الكود، لكن دوام البيانات عملياً يعتمد على مساحة التخزين المستخدمة؛ دفتر Colab يهيئ Google Drive افتراضياً لحفظ قاعدة البيانات/النتائج عند تنفيذ إعداداته. Runtime قائم لا يتزامن تلقائياً مع كل commit؛ يجب إعادة تشغيل خلايا الإعداد/السحب للحصول على آخر main.
+- لا يوجد حتى الآن benchmark حقيقي لـprocessing FPS أو latency على Google Colab، ولا اختبار بث هاتف حي، ولا تحقق دقة ميداني لـTrackTrack/ReID أو نماذج اللون/make/model.
+- TwinCar مبني على 196 فئة Stanford Cars، لذا لا ندعي أنه يتعرف على Toyota Hilux أو Mercedes G-Class؛ هذه الفئات تحتاج تدريباً/بيانات ونموذجاً مناسباً. نتائج النموذج خارج صور Stanford Cars قد تتأثر باختلاف مجال الكاميرات/الزوايا.
+- ReID في إعداد TrackTrack مهيأ باستخدام `with_reid: true` و`yolo26n-reid.onnx`، وهو تكامل إعدادات وليس إثباتاً على ثبات الهوية في الفيديوهات الواقعية. يلزم قياس ID switches وID recovery على مقاطع ذات اختفاء/حجب.
+- لم يتم استبدال معالج الفيديو بإطار عمل آخر أو إسقاط إطارات التحليل عشوائياً؛ نحتاج قياساً على Colab مع تسجيل processing_fps وsource_fps وdropped frames قبل اتخاذ قرار تقليل الدقة أو معدل التحليل حتى لا نضعف التتبع.
+
+#### الخطوات التالية عند استئناف التطوير
+
+1. اختبار Notebook من البداية في Google Colab والتحقق من CUDA/GPU، تنزيل الأوزان، health endpoint، النفق، وفتح لوحة المختبر.
+2. تشغيل مقطع اختباري قصير ثم قياس FPS ونسبة الزمن الحقيقي وتأخر المعاينة وعدد dropped frames ومقارنة العدّ اليدوي.
+3. اختبار TrackTrack/ReID على حالات حجب وعودة المركبة/الشخص وتسجيل ID switches وعمليات إعادة الربط.
+4. تثبيت APK على هاتف Android وتجربة WSS مع tunnel، ثم اختبار انقطاع الشبكة وإعادة الاتصال، وقياس معدل الإرسال الفعلي.
+5. تنفيذ اختبار خصوصاً لحفظ SQLite على Google Drive بعد إغلاق Runtime وفتحه من جديد للتأكد من عدم فقد تقارير الجلسات.
+6. إذا ظل تحليل الفيديو أبطأ من المصدر بعد قياس موثق، ندرس inference frame skipping أو dynamic resolution/batch pipeline مع المحافظة على cadence الإطارات الأصلية للملف الناتج وtimestamps؛ لا نطبق تحسيناً تخمينياً دون benchmark.
+
+- عند انتهاء هذه الجولة كان آخر التزام برمجي على main هو `e9e2a7d75c328a567e95a39e1f75537bd5c1e9b7`. يجب الاستمرار من HEAD الفعلي وقراءة هذا الملف قبل كل جولة، وإضافة قسم جديد دون تعديل أو حذف السجل السابق.
