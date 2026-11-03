@@ -24,7 +24,8 @@ def estimate_vehicle_color(frame: Any, box: Any) -> tuple[str | None, float]:
     hue = hsv[:, :, 0].astype(np.int16)
     saturation = hsv[:, :, 1].astype(np.int16)
     value = hsv[:, :, 2].astype(np.int16)
-    valid = (value > 28) & (value < 250)
+    # Keep clipped highlights and deep shadows: both are essential for white/black paints.
+    valid = np.ones_like(value, dtype=bool)
     if int(valid.sum()) < 40:
         return None, 0.0
 

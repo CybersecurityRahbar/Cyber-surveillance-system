@@ -73,6 +73,7 @@ class VideoLabProcessor:
         frame_index = 0
         processed_frames = 0
         preview_frames = 0
+        last_preview_at = 0.0
         frame_size = None
         line_counter = None
         line_y = None
@@ -219,6 +220,7 @@ class VideoLabProcessor:
                                 "_colour_samples": 0,
                                 "_make_model_votes": {},
                                 "_make_model_samples": 0,
+                                "_make_model_attempts": 0,
                             },
                         )
                         record["frames_seen"] += 1
@@ -251,8 +253,11 @@ class VideoLabProcessor:
                         if (
                             object_type == "vehicle"
                             and frame_index % 15 == 0
-                            and record.get("_make_model_samples", 0) < 5
+                            and record.get("_make_model_attempts", 0) < 5
                         ):
+                            record["_make_model_attempts"] = (
+                                record.get("_make_model_attempts", 0) + 1
+                            )
                             classifier = getattr(self.detector, "classify_vehicle", None)
                             prediction = classifier(image, detection.box) if callable(classifier) else None
                             if prediction and prediction.get("confidence", 0.0) >= 0.45:
@@ -324,7 +329,10 @@ class VideoLabProcessor:
                 writer.write(annotated)
                 processed_frames += 1
 
-                if on_preview is not None:
+                preview_clock = monotonic()
+                if on_preview is not None and (
+                    processed_frames == 1 or preview_clock - last_preview_at >= 1.0 / 12.0
+                ):
                     ok, encoded = cv2.imencode(
                         ".jpg",
                         annotated,
@@ -333,6 +341,7 @@ class VideoLabProcessor:
                     if ok:
                         on_preview(encoded.tobytes())
                         preview_frames += 1
+                        last_preview_at = preview_clock
 
                 if on_progress is not None and (
                     processed_frames == 1 or processed_frames % 5 == 0
@@ -436,13 +445,16 @@ class VideoLabProcessor:
                     model_score / max(1, record.pop("_make_model_samples", 1)), 3
                 )
                 record["make_model_status"] = "classified_by_configured_model"
+                record["make_model_samples"] = record.pop("_make_model_samples", 0)
+                record["make_model_attempts"] = record.pop("_make_model_attempts", 0)
             else:
                 record["make"] = None
                 record["model"] = None
                 record["make_model"] = None
                 record["make_model_confidence"] = 0.0
                 record["make_model_status"] = "model_not_configured_or_no_confident_result"
-                record.pop("_make_model_samples", None)
+                record["make_model_samples"] = record.pop("_make_model_samples", 0)
+                record["make_model_attempts"] = record.pop("_make_model_attempts", 0)
             record["average_confidence"] = round(
                 record.pop("confidence_sum") / max(1, record["frames_seen"]), 3
             )

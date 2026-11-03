@@ -16,7 +16,10 @@ def test_lab_ui_and_capabilities_are_available(tmp_path):
 
     page = client.get("/lab")
     assert page.status_code == 200
-    assert "مختبر الرؤية والتتبع" in page.text
+    assert "مختبر" in page.text
+    assert "مختبر الرؤية الحاسوبية" in page.text
+    assert "liveTrackList" in page.text
+    assert "trackReportBody" in page.text
     assert "/lab-assets/lab.js" in page.text
     assert client.get("/lab-assets/lab.js").status_code == 200
 
@@ -63,3 +66,56 @@ def test_api_key_protects_lab_api_but_keeps_ui_reachable(tmp_path):
         headers={"X-API-Key": "colab-test-key-with-sufficient-length"},
     )
     assert authorized.status_code == 200
+
+
+
+def test_mjpeg_preview_stream_and_lab_report_routes(tmp_path):
+    app = create_app(
+        Settings(
+            environment="test",
+            database=str(tmp_path / "events.sqlite3"),
+            lab_storage_dir=str(tmp_path / "lab"),
+        )
+    )
+    client = TestClient(app)
+    manager = app.state.lab_jobs
+    job_id = manager.create(
+        source_type="uploaded_video",
+        source_label="Local video upload",
+        filename="sample.mp4",
+        options={},
+    )
+    jpeg = b"\\xff\\xd8test-jpeg\\xff\\xd9"
+    manager.set_preview(job_id, jpeg)
+    manager.update(job_id, status="completed")
+
+    streamed = client.get(f"/api/v1/lab/jobs/{job_id}/preview.mjpg")
+    assert streamed.status_code == 200
+    assert "multipart/x-mixed-replace" in streamed.headers["content-type"]
+    assert b"Content-Type: image/jpeg" in streamed.content
+    assert jpeg in streamed.content
+
+    app.state.event_store.save_lab_report(
+        session_id=job_id,
+        source_type="uploaded_video",
+        source_label="Local video upload",
+        filename="sample.mp4",
+        status="completed",
+        started_at="2026-11-03T10:00:00+00:00",
+        finished_at="2026-11-03T10:00:02+00:00",
+        summary={"frames_processed": 5},
+        tracks=[{
+            "track_id": 42,
+            "object_type": "vehicle",
+            "class_label": "CAR",
+            "frames_seen": 5,
+            "first_seen_seconds": 0.0,
+            "last_seen_seconds": 1.0,
+        }],
+    )
+    report = client.get(f"/api/v1/lab/reports/{job_id}")
+    tracks = client.get(f"/api/v1/lab/reports/{job_id}/tracks")
+    assert report.status_code == 200
+    assert report.json()["summary"]["frames_processed"] == 5
+    assert tracks.status_code == 200
+    assert tracks.json()[0]["track_id"] == 42
