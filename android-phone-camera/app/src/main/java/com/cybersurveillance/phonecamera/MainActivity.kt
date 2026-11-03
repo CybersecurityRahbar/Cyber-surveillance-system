@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.ImageFormat
 import android.graphics.Rect
-import android.media.YuvImage
+import android.graphics.YuvImage
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.WindowManager
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
             textSize = 14f
             setTextColor(0xFFEAF3FF.toInt())
             setHintTextColor(0xFF7794B4.toInt())
-            singleLine = true
+            setSingleLine(true)
         }
     }
 
