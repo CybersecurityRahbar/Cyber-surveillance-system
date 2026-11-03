@@ -26,8 +26,8 @@ WebSocket endpoint: `/api/v1/phone/stream/{camera_id}`. Payloads are JPEG frames
 ## Network modes
 
 - **Internet:** phone sends WSS to the public HTTPS tunnel or a deployed HTTPS/WSS endpoint.
-- **Same Wi-Fi:** use WS to a local Python host LAN address when the server runs on that host.
-- **USB:** Colab cannot access an Android device over direct USB/ADB. USB tethering can provide network connectivity. A direct ADB/USB bridge is only possible when Python runs on the connected PC.
+- **Same Wi-Fi:** the current Android manifest does not permit cleartext traffic. Use a local HTTPS/WSS endpoint with a certificate trusted by the phone; plain WS is not a supported working path in this build.
+- **USB:** Colab cannot access an Android device over direct USB/ADB. USB tethering can provide network connectivity to a local host, but the current app still requires a trusted HTTPS/WSS endpoint. A direct ADB/USB bridge is only possible when Python runs on the connected PC.
 
 ## MVP limits
 
