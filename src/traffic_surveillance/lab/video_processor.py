@@ -440,27 +440,22 @@ class VideoLabProcessor:
             prediction = prediction or {}
             learned_colour = prediction.get("vehicle_color_model") or {}
             if learned_colour.get("label") and learned_colour.get("confidence", 0) >= 0.35:
-                record["vehicle_color"] = learned_colour["label"]
-                record["vehicle_color_confidence"] = round(
-                    float(learned_colour["confidence"]), 3
-                )
-                record["vehicle_color_method"] = "learned_efficientnet_b4"
-                record["vehicle_color_top3"] = learned_colour.get("top3", [])
+                record["_learned_vehicle_colour"] = learned_colour
             make_prediction = prediction.get("make_model_model") or {}
             custom_prediction = prediction.get("custom_make_model") or {}
             chosen_make = custom_prediction or make_prediction
             if chosen_make.get("label") and chosen_make.get("confidence", 0) >= 0.42:
-                record["make_model"] = str(chosen_make["label"])
-                record["make_model_confidence"] = round(
-                    float(chosen_make["confidence"]), 3
-                )
-                record["make_model_status"] = (
+                model_label = str(chosen_make["label"])
+                record["_make_model_votes"] = {model_label: float(chosen_make["confidence"])}
+                record["_make_model_samples"] = 1
+                record["_make_model_attempts"] = 1
+                record["_make_model_status"] = (
                     "classified_by_custom_model"
                     if custom_prediction
                     else "candidate_from_stanford_cars_model"
                 )
-                record["make_model_top3"] = make_prediction.get("top3", [])
-                record["vehicle_year_estimate"] = make_prediction.get("year")
+                record["_make_model_top3"] = make_prediction.get("top3", [])
+                record["_pretrained_year"] = make_prediction.get("year")
 
         elapsed = max(monotonic() - start_clock, 1e-6)
         media_duration = (
@@ -485,6 +480,16 @@ class VideoLabProcessor:
             else:
                 record["vehicle_color"] = None
                 record["vehicle_color_confidence"] = 0.0
+            learned_colour = record.pop("_learned_vehicle_colour", None)
+            if learned_colour:
+                record["vehicle_color"] = learned_colour["label"]
+                record["vehicle_color_confidence"] = round(
+                    float(learned_colour["confidence"]), 3
+                )
+                record["vehicle_color_method"] = "learned_efficientnet_b4"
+                record["vehicle_color_top3"] = learned_colour.get("top3", [])
+            elif colour_total:
+                record["vehicle_color_method"] = "hsv_heuristic"
             colour_samples = record.pop("_colour_samples")
             record.pop("_colour_confidence_sum")
             model_votes = record.pop("_make_model_votes", {})
@@ -500,7 +505,11 @@ class VideoLabProcessor:
                 record["make_model_confidence"] = round(
                     model_score / max(1, record.pop("_make_model_samples", 1)), 3
                 )
-                record["make_model_status"] = "classified_by_configured_model"
+                record["make_model_status"] = record.pop(
+                    "_make_model_status", "classified_by_configured_model"
+                )
+                record["make_model_top3"] = record.pop("_make_model_top3", [])
+                record["vehicle_year_estimate"] = record.pop("_pretrained_year", None)
                 record["make_model_samples"] = record.pop("_make_model_samples", 0)
                 record["make_model_attempts"] = record.pop("_make_model_attempts", 0)
             else:
