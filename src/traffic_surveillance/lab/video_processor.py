@@ -446,6 +446,8 @@ class VideoLabProcessor:
                 except Exception as exc:
                     record["attribute_model_error"] = type(exc).__name__
             prediction = prediction or {}
+            if prediction.get("attribute_model_error"):
+                record["attribute_model_error"] = prediction["attribute_model_error"]
             learned_colour = prediction.get("vehicle_color_model") or {}
             if learned_colour.get("label") and learned_colour.get("confidence", 0) >= 0.35:
                 record["_learned_vehicle_colour"] = learned_colour
