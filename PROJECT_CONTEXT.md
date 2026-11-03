@@ -1271,3 +1271,62 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 6. إذا ظل تحليل الفيديو أبطأ من المصدر بعد قياس موثق، ندرس inference frame skipping أو dynamic resolution/batch pipeline مع المحافظة على cadence الإطارات الأصلية للملف الناتج وtimestamps؛ لا نطبق تحسيناً تخمينياً دون benchmark.
 
 - عند انتهاء هذه الجولة كان آخر التزام برمجي على main هو `e9e2a7d75c328a567e95a39e1f75537bd5c1e9b7`. يجب الاستمرار من HEAD الفعلي وقراءة هذا الملف قبل كل جولة، وإضافة قسم جديد دون تعديل أو حذف السجل السابق.
+
+
+### 21.20 — تشديد اتصال الهاتف وثبات تصنيف المسار وإصلاح fallback للمصنفات (2026-11-03)
+
+#### إضافات طلب/مراجعة هذه الجولة
+
+- استمرت المراجعة بعد نجاح Python CI الأولي، وفحصنا بناء تطبيق Android فعلياً بدلاً من الاكتفاء بفحوصات Kotlin الشكلية.
+- ظهر من Gradle أن مصدر Android كان يحوي خطأ استيراد `YuvImage` من الحزمة الخاطئة، وخاصية `singleLine` غير المعروفة في موضعها؛ أُصلحتا واُعيد البناء بنجاح.
+- راجعنا توافق سياسة Android cleartext مع وصف README: Manifest لا يسمح باتصالات cleartext، بينما كانت شاشة التطبيق تقبل HTTP وتبني WS. تم تعديل التطبيق ليقبل HTTPS فقط ويحوّله إلى WSS، وعدم فتح cleartext traffic على مستوى التطبيق.
+- أظهرت مراجعة تقرير الفئات أن Track ID نفسه يمكن أن يظهر في سجلين مختلفين للفئات (مثل CAR وTRUCK) عند تقلب label؛ عداد إجمالي المركبات كان قد أُصلح ليحصي Track ID مرة واحدة، لكن تفصيل الفئات كان لا يزال يعد نفس Track تحت فئتين. أضيف تصويت مرجح بالثقة على مستوى السجل لكل Track، ويعرض التقرير والتصنيف النهائي فئة واحدة مستقرة.
+- راجعنا اختيار مصنف make/model المخصص مع TwinCar؛ كان وجود نتيجة مخصصة منخفضة الثقة يكفي لاختيارها ويحجب نتيجة pretrained أقوى. تم تعديل الاختيار ليستخدم custom prediction فقط عندما يتجاوز حد الثقة، وإلا يعود إلى TwinCar.
+- أضيف اختبار مستقل للحالة السابقة حتى لا يتراجع سلوك fallback.
+
+#### التعديلات الجديدة
+
+- `b8a2ddf1df1a61901ce3ac7375d7bec5116e719e`:
+  - تصحيح annotation نوع `unique_vehicle_ids` إلى `set[int]` بما يتفق مع القيم التي تضاف إليه فعلياً.
+- `ec28b85ae0ec0bb5b0132e9ad87581dd899e60d6`:
+  - حصر تطبيق Android على HTTPS/WSS؛ لم يعد يقبل HTTP/WS غير المشفر.
+  - تم التحقق من بناء التطبيق بعد هذا التغيير.
+- `e764ad0c04d486b0a4f2634db6b244779dcd639b`:
+  - اعتماد stable per-track class label في التقارير على مجموع ثقة التنبؤات، وجمع كل Track تحت فئة واحدة بدلاً من إظهاره في فئتين عند flicker.
+- `ddb5140d8261ed9724aae8a872608bcfc3cbc9ce`:
+  - تحديث اختبار تبدل label للتحقق من أن نفس Track يظهر مرة واحدة ضمن فئة الأغلبية.
+- `6da6d2cb6498e55868f2263cb67ef5f27d1e8e32`:
+  - تحسين اختيار make/model: لا يحجب custom classifier منخفض الثقة نتيجة pretrained.
+- `eebf5327e193541530808c315c4449854d656784`:
+  - إضافة اختبار يؤكد اختيار TwinCar عندما تكون نتيجة المصنف المخصص غير موثوقة.
+
+#### التحقق بعد هذه التعديلات
+
+- Python CI على الالتزام `eebf5327e193541530808c315c4449854d656784`:
+  - Run ID: `41712188551`.
+  - الحالة: success.
+  - Ruff: success.
+  - JavaScript syntax: success.
+  - Notebook JSON validation: success.
+  - Pytest: `20 passed, 1 warning in 1.98s`.
+  - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41712188551
+- Android Phone Camera workflow على الالتزام `ec28b85ae0ec0bb5b0132e9ad87581dd899e60d6`:
+  - Run ID: `41711694643`.
+  - الحالة: success.
+  - Gradle Debug APK: success.
+  - Artifact upload: success.
+  - Artifact ID: `13267213776`, الاسم: `cybervision-phone-camera-debug`, الحجم التقريبي 4.46 MB، وصالح حتى 2027-02-01 حسب سجل GitHub عند الفحص.
+  - الرابط: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41711694643
+- اختبار Python على `b8a2ddf1...` نجح بعد تصحيح نوع المعرّف، واختبار كامل أحدث على `eebf5327...` اجتاز 20 اختباراً.
+- لم يتم تثبيت APK على جهاز فعلي؛ ما ثبت لدينا هو build CI وإرفاق artifact فقط.
+
+#### الحالة الحالية
+
+- آخر كود مختبر: `eebf5327e193541530808c315c4449854d656784` على `main` قبل توثيق هذا القسم.
+- طبقة النقل Android الحالية تتطلب HTTPS/WSS موثوقاً، وهي لا توفر اتصال WS محلياً غير مشفر.
+- تقرير vehicle class counts أصبح يحصي Track مرة واحدة تحت التصنيف الأعلى مجموعاً للثقة عبر Frames.
+- اختيار make/model custom classifier أصبح يتيح fallback إلى TwinCar عندما تكون ثقة المخصص دون الحد المحدد.
+- لا تزال نتائج الأداء وReID والسمات المدربة بحاجة إلى مقاطع اختبار واقعية وقياس داخل Google Colab؛ CI لا يثبت هذه النتائج.
+- لم يتم اختبار جودة تعرف TwinCar في صور الطريق الفعلية أو إثبات ملاءمته لهيلكس/G-Class؛ مراجع النموذج نفسه تحدد 196 فئة من Stanford Cars وتذكر فجوة مجال خارج بيانات التدريب. راجع القيود الموثقة في القسم 21.19.
+- لم يتم بعد نقل تطبيق الهاتف إلى H.264/WebRTC/MediaMTX؛ ما زال JPEG/WebSocket هو MVP الحالي.
+
