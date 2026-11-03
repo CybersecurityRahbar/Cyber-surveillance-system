@@ -394,6 +394,14 @@ class VideoLabProcessor:
                             "unique_vehicle_tracks": len(unique_vehicle_keys),
                             "unique_person_tracks": len(unique_person_ids),
                             "line_crossings": dict(crossing_counts),
+                            "input_frames_received": (
+                                getattr(source, "received_frames", processed_frames)
+                                if is_phone_stream else processed_frames
+                            ),
+                            "input_frames_dropped": (
+                                getattr(source, "dropped_frames", 0)
+                                if is_phone_stream else 0
+                            ),
                             "current_tracks": [
                                 {
                                     "track_id": item.track_id,
