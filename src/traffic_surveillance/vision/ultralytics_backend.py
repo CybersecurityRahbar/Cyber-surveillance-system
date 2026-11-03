@@ -47,12 +47,18 @@ class UltralyticsTrackingBackend:
                 )
         self._tracker = tracker
         self._confidence = confidence
+        self._imgsz = 512
+        self._max_det = 60
+        self._classes = [0, 1, 2, 3, 5, 7]
         if device is None:
             try:
                 import torch
 
                 self._device = "0" if torch.cuda.is_available() else "cpu"
                 self._half = bool(torch.cuda.is_available())
+                if torch.cuda.is_available():
+                    torch.backends.cudnn.benchmark = True
+                    torch.set_float32_matmul_precision("high")
             except ImportError:
                 self._device = "cpu"
                 self._half = False
@@ -67,8 +73,9 @@ class UltralyticsTrackingBackend:
             tracker=self._tracker,
             conf=self._confidence,
             device=self._device,
-            imgsz=640,
-            max_det=100,
+            imgsz=self._imgsz,
+            max_det=self._max_det,
+            classes=self._classes,
             half=self._half,
             verbose=False,
         )
@@ -76,18 +83,30 @@ class UltralyticsTrackingBackend:
             return []
 
         result = results[0]
-        if result.boxes is None:
+        boxes = result.boxes
+        if boxes is None or len(boxes) == 0:
             return []
 
+        # Transfer the complete result tensor once. Per-box .cpu()/.item() calls
+        # force repeated GPU synchronizations and become expensive in dense scenes.
+        data = boxes.data.detach().cpu().numpy()
+        is_track = bool(boxes.is_track)
         detections: list[Detection] = []
-        for box in result.boxes:
-            xyxy = box.xyxy[0].detach().cpu().tolist()
-            class_id = int(box.cls[0].item())
-            track_id = int(box.id[0].item()) if box.id is not None else None
+        for row in data:
+            if is_track:
+                xyxy = row[:4]
+                track_id = int(row[4])
+                confidence = float(row[5])
+                class_id = int(row[6])
+            else:
+                xyxy = row[:4]
+                track_id = None
+                confidence = float(row[4])
+                class_id = int(row[5])
             detections.append(
                 Detection(
                     label=str(self._model.names[class_id]),
-                    confidence=float(box.conf[0].item()),
+                    confidence=confidence,
                     box=BoundingBox(
                         x1=float(xyxy[0]),
                         y1=float(xyxy[1]),
