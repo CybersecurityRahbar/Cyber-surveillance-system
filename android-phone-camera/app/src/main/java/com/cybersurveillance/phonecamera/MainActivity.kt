@@ -138,16 +138,15 @@ class MainActivity : ComponentActivity() {
         val base = endpointInput.text.toString().trim().trimEnd('/')
         val cameraId = cameraIdInput.text.toString().trim()
         val key = apiKeyInput.text.toString().trim()
-        if (!(base.startsWith("https://") || base.startsWith("http://")) ||
+        if (!base.startsWith("https://") ||
             cameraId.isBlank() || key.length < 32
         ) {
-            status("أدخل رابط HTTPS ومعرّف الكاميرا ومفتاح API بطول 32 حرفاً على الأقل")
+            status("استخدم رابط HTTPS موثوقاً، ومعرّف كاميرا ومفتاح API بطول 32 حرفاً على الأقل")
             return
         }
         stopStreaming()
-        val scheme = if (base.startsWith("https://")) "wss://" else "ws://"
-        val host = base.substringAfter("://")
-        val streamUrl = scheme + host + "/api/v1/phone/stream/" + cameraId
+        val host = base.removePrefix("https://")
+        val streamUrl = "wss://" + host + "/api/v1/phone/stream/" + cameraId
         val request = Request.Builder()
             .url(streamUrl)
             .header("X-API-Key", key)
