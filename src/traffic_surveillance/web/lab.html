@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0a1118">
-  <title>مختبر المراقبة الذكية</title>
+  <meta name="theme-color" content="#080e18">
+  <meta name="description" content="Cyber Surveillance System — Intelligent Traffic Operations Console">
+  <title>مركز المراقبة الذكية | Cyber Surveillance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/lab-assets/lab.css">
   <script defer src="/lab-assets/lab.js"></script>
 </head>
@@ -12,173 +16,245 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-mark"><span></span><span></span><span></span><span></span></div>
-        <div><strong>CYBER SURVEILLANCE</strong><small>TRAFFIC INTELLIGENCE</small></div>
+        <div class="brand-symbol"><span></span><span></span><span></span><span></span></div>
+        <div class="brand-copy">
+          <strong>CYBER<span>VISION</span></strong>
+          <small>INTELLIGENCE PLATFORM</small>
+        </div>
       </div>
-      <div class="side-label">مركز العمليات</div>
+
+      <div class="workspace-label">مساحة العمل <span>01</span></div>
       <nav class="nav">
-        <a class="nav-item" href="#"><span class="nav-icon">◫</span> نظرة عامة</a>
-        <a class="nav-item active" href="/lab"><span class="nav-icon">⌗</span> المختبر <b>01</b></a>
-        <a class="nav-item disabled"><span class="nav-icon">▦</span> جدار الكاميرات <i>لاحقاً</i></a>
-        <a class="nav-item disabled"><span class="nav-icon">⌁</span> التحليلات المرورية</a>
-        <a class="nav-item disabled"><span class="nav-icon">◎</span> الأحداث والإنذارات</a>
-        <a class="nav-item disabled"><span class="nav-icon">◉</span> معايرة الكاميرات</a>
-        <a class="nav-item disabled"><span class="nav-icon">▤</span> الأدلة والتقارير</a>
+        <a class="nav-item active" href="/lab">
+          <span class="nav-glyph">◈</span><span>مختبر الرؤية</span><b>LIVE</b>
+        </a>
+        <a class="nav-item disabled" href="#" aria-disabled="true">
+          <span class="nav-glyph">▦</span><span>جدار الكاميرات</span><i>قريباً</i>
+        </a>
+        <a class="nav-item disabled" href="#" aria-disabled="true">
+          <span class="nav-glyph">⌁</span><span>التحليل المروري</span>
+        </a>
+        <a class="nav-item disabled" href="#" aria-disabled="true">
+          <span class="nav-glyph">⌖</span><span>مركز الأحداث</span>
+        </a>
+        <a class="nav-item disabled" href="#" aria-disabled="true">
+          <span class="nav-glyph">▤</span><span>السجلات والتقارير</span>
+        </a>
+        <a class="nav-item disabled" href="#" aria-disabled="true">
+          <span class="nav-glyph">⌗</span><span>معايرة الكاميرات</span>
+        </a>
       </nav>
-      <div class="sidebar-bottom">
-        <div class="engine-status"><span class="pulse"></span><div><b>محرك التحليل</b><small id="backendStatus">جاري فحص البيئة...</small></div></div>
-        <div class="build-label">PYTHON CORE <span>0.3</span></div>
+
+      <div class="sidebar-spacer"></div>
+      <div class="engine-card">
+        <div class="engine-card-head">
+          <span class="engine-orb"><i></i></span>
+          <div><b>محرك الرؤية</b><small id="backendStatus">يتم فحص البيئة</small></div>
+        </div>
+        <div class="engine-meta"><span>PYTHON CORE</span><b>0.4</b></div>
       </div>
+      <div class="sidebar-foot"><span class="foot-mark"></span> CENTRAL SURVEILLANCE NODE</div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div class="breadcrumb">مركز العمليات <span>/</span> <b>مختبر الكاميرا الواحدة</b></div>
-        <div class="top-actions">
-          <label class="api-key"><span>مفتاح API</span><input id="apiKey" type="password" placeholder="اختياري محلياً" autocomplete="off"></label>
-          <span class="connection"><i></i> واجهة محلية</span>
+        <div class="crumbs">
+          <span>مركز العمليات</span><i>/</i><b>مختبر الرؤية والتتبع</b>
+        </div>
+        <div class="topbar-right">
+          <label class="api-key">
+            <span class="key-icon">⌑</span>
+            <span class="key-label">مفتاح الجلسة</span>
+            <input id="apiKey" type="password" placeholder="API key" autocomplete="off" spellcheck="false">
+          </label>
+          <div class="connection-pill"><i></i><span>اتصال الواجهة</span></div>
+          <div class="user-mark" title="Local operator">OP</div>
         </div>
       </header>
 
-      <section class="page-heading">
-        <div>
-          <div class="eyebrow"><span></span> SINGLE CAMERA / LAB ENVIRONMENT</div>
-          <h1>مختبر الرؤية والتتبع</h1>
-          <p>اختبر فيديو واحداً قبل ربط الكاميرات الحقيقية. راقب الكشف والتتبع ومعرّفات المركبات والعدّادات إطاراً بإطار.</p>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> VISUAL INTELLIGENCE / SINGLE CAMERA LAB</div>
+          <h1>مختبر <em>الرؤية الحاسوبية</em></h1>
+          <p>بيئة اختبار وتحليل للفيديو المروري، تجمع الكشف والتتبع وتحليل الحركة في مساحة تشغيل واحدة.</p>
         </div>
-        <div class="heading-chip"><span class="chip-dot"></span> وضع تجريبي — لا توجد كاميرا مرتبطة</div>
+        <div class="hero-state">
+          <span class="state-pulse"></span>
+          <div><b>بيئة اختبار مستقلة</b><small>مصدر واحد · لا توجد كاميرا ميدانية مرتبطة</small></div>
+        </div>
       </section>
 
-      <section class="capability-strip">
-        <div><span class="cap-icon">◈</span><div><small>نموذج الكشف</small><b id="modelName">YOLO26n</b></div></div>
-        <div><span class="cap-icon">⌁</span><div><small>نظام التتبع</small><b>ByteTrack / BoT-SORT</b></div></div>
-        <div><span class="cap-icon">▣</span><div><small>مصدر الفيديو</small><b>ملفات / RTSP / كاميرا الخادم</b></div></div>
-        <div><span class="cap-icon">◷</span><div><small>المعالجة</small><b>إطار بإطار</b></div></div>
+      <section class="top-metrics">
+        <article class="top-metric">
+          <span class="metric-icon mint">◉</span>
+          <div><small>المركبات المكتشفة</small><strong id="metricVehicles">—</strong><em>هويات فريدة في الجلسة</em></div>
+        </article>
+        <article class="top-metric">
+          <span class="metric-icon blue">◎</span>
+          <div><small>الأشخاص المكتشفون</small><strong id="metricPeople">—</strong><em>هويات فريدة في الجلسة</em></div>
+        </article>
+        <article class="top-metric">
+          <span class="metric-icon amber">⇣</span>
+          <div><small>عبور خط العد</small><strong id="metricCrossings">—</strong><em>الأسفل <b id="metricDown">—</b> · الأعلى <b id="metricUp">—</b></em></div>
+        </article>
+        <article class="top-metric">
+          <span class="metric-icon violet">ϟ</span>
+          <div><small>معدل المعالجة</small><strong id="metricFps">—</strong><em>إطار في الثانية</em></div>
+        </article>
       </section>
 
-      <section class="workspace">
-        <div class="panel source-panel">
-          <div class="panel-title">
-            <div><span class="step">01</span><div><h2>مصدر الاختبار</h2><p>اختر ملف فيديو أو مصدراً حياً واحداً</p></div></div>
-            <span class="small-tag">INPUT SOURCE</span>
+      <section class="main-grid">
+        <section class="panel source-panel">
+          <div class="panel-heading">
+            <div class="heading-index">01</div>
+            <div class="heading-text"><h2>مصدر الفيديو</h2><p>حمّل مقطعاً أو اربط مصدراً حياً</p></div>
+            <span class="heading-tag">INPUT</span>
           </div>
+
           <div class="mode-switch">
-            <button class="mode active" data-mode="file">فيديو من الجهاز</button>
-            <button class="mode" data-mode="live">بث مباشر</button>
+            <button class="mode active" type="button" data-mode="file"><span>▧</span> ملف فيديو</button>
+            <button class="mode" type="button" data-mode="live"><span>◉</span> بث مباشر</button>
           </div>
 
           <div id="fileMode" class="mode-content">
             <label class="drop-zone" id="dropZone">
               <input id="videoFile" type="file" accept=".mp4,.mov,.mkv,.avi,.m4v,.webm,.mpeg,.mpg,.ts,video/*">
-              <span class="upload-symbol">↑</span>
-              <strong>اسحب الفيديو إلى هنا أو اضغط للاختيار</strong>
-              <small>MP4 · MOV · MKV · AVI · WEBM — بحسب codecs المتاحة</small>
-              <span id="selectedFile" class="selected-file">لم يتم اختيار فيديو</span>
+              <span class="upload-icon"><i>↑</i></span>
+              <strong>اسحب الفيديو وأفلته هنا</strong>
+              <small>أو انقر لاختيار ملف من جهازك</small>
+              <span class="file-formats">MP4 <b>·</b> MOV <b>·</b> MKV <b>·</b> AVI <b>·</b> WEBM</span>
+              <span id="selectedFile" class="selected-file">لم يتم اختيار ملف بعد</span>
             </label>
             <div class="file-preview" id="filePreviewWrap" hidden>
-              <video id="localPreview" controls muted></video>
-              <div><b id="fileMeta">معاينة الملف</b><span id="fileDimensions"></span></div>
+              <video id="localPreview" controls muted playsinline></video>
+              <div class="file-preview-meta"><b id="fileMeta">معاينة المقطع</b><span id="fileDimensions"></span></div>
             </div>
           </div>
 
           <div id="liveMode" class="mode-content" hidden>
-            <label class="field-label" for="liveSource">عنوان RTSP أو كاميرا متصلة بخادم التحليل</label>
+            <label class="field-label" for="liveSource">عنوان مصدر RTSP</label>
             <input id="liveSource" class="text-input" dir="ltr" placeholder="rtsp://192.168.1.20:8554/stream">
-            <div class="hint">للكاميرا المتصلة مباشرة بالحاسوب استخدم server-camera:0. ولتجربة بث الهاتف لاحقاً سنستخدم خادم MediaMTX.</div>
+            <div class="hint">يمكن استخدام RTSP أو كاميرا متصلة بالخادم مثل server-camera:0. يجب أن يكون المصدر متاحاً من بيئة Colab.</div>
             <div class="inline-fields">
-              <label><span>مدة جلسة الاختبار</span><select id="liveDuration"><option value="30">30 ثانية</option><option value="60" selected>دقيقة واحدة</option><option value="180">3 دقائق</option><option value="300">5 دقائق</option></select></label>
-              <label><span>دقة المعالجة</span><select id="liveWidth"><option value="960">960px</option><option value="1280" selected>1280px</option><option value="1920">1920px</option></select></label>
+              <label><span>مدة الجلسة</span><select id="liveDuration"><option value="30">30 ثانية</option><option value="60" selected>دقيقة واحدة</option><option value="180">3 دقائق</option><option value="300">5 دقائق</option></select></label>
+              <label><span>دقة العرض والمعالجة</span><select id="liveWidth"><option value="640">640px</option><option value="960" selected>960px</option><option value="1280">1280px</option></select></label>
             </div>
-            <div class="hint warning-hint">لا تضع عنوان بث عاماً على الإنترنت. استخدم شبكة محلية موثوقة أو VPN ومصادقة عند ربط مصدر بعيد.</div>
+            <div class="secure-note">لا تنشر عناوين كاميرات خاصة على الإنترنت دون VPN ومصادقة.</div>
           </div>
 
-          <div class="options">
-            <div class="panel-subtitle">إعدادات محرك الرؤية</div>
-            <div class="inline-fields">
+          <div class="settings-block">
+            <div class="settings-heading"><span>إعدادات التحليل</span><i>CONFIGURATION</i></div>
+            <div class="field-grid">
               <label><span>خوارزمية التتبع</span>
                 <select id="tracker">
-                  <option value="bytetrack.yaml" selected>ByteTrack — خفيف وسريع</option>
-                  <option value="botsort.yaml">BoT-SORT — مع تعويض حركة الكاميرا</option>
-                  <option value="ocsort.yaml">OC-SORT — للحركة غير الخطية</option>
-                  <option value="deepocsort.yaml">Deep OC-SORT — مع Re-ID</option>
+                  <option value="bytetrack.yaml" selected>ByteTrack · سريع</option>
+                  <option value="botsort.yaml">BoT-SORT · حركة الكاميرا</option>
+                  <option value="ocsort.yaml">OC-SORT · حركة غير خطية</option>
+                  <option value="deepocsort.yaml">Deep OC-SORT · Re-ID</option>
                   <option value="fasttrack.yaml">FastTracker</option>
                   <option value="tracktrack.yaml">TrackTrack</option>
                 </select>
               </label>
-              <label><span>حجم إطار المعالجة</span>
-                <select id="maxWidth"><option value="960">960px — اقتصادي</option><option value="1280" selected>1280px — متوازن</option><option value="1920">1920px — تفاصيل أعلى</option></select>
+              <label><span>عرض إطار المصدر</span>
+                <select id="maxWidth"><option value="640">640px · أداء أعلى</option><option value="960" selected>960px · متوازن</option><option value="1280">1280px · تفاصيل أكثر</option></select>
               </label>
             </div>
-            <div class="slider-row">
-              <label for="confidence">ثقة الكشف الأدنى <b id="confidenceValue">25%</b></label>
+            <div class="range-field">
+              <label for="confidence"><span>حد ثقة الكشف</span><b id="confidenceValue">25%</b></label>
               <input id="confidence" type="range" min="10" max="80" value="25" step="5">
             </div>
-            <div class="slider-row">
-              <label for="linePosition">موضع خط العد الافتراضي <b id="lineValue">65%</b></label>
+            <div class="range-field">
+              <label for="linePosition"><span>موضع خط العد</span><b id="lineValue">65%</b></label>
               <input id="linePosition" type="range" min="20" max="85" value="65" step="5">
             </div>
-            <p class="hint">يمكن تغيير الخط لاحقاً برسمه على صورة الكاميرا. حالياً يعرض المختبر خطاً أفقياً افتراضياً للعد.</p>
+            <label class="toggle-row">
+              <input id="showHud" type="checkbox">
+              <span class="toggle-ui"></span>
+              <span><b>إظهار لوحة البيانات داخل الفيديو</b><small>مغلقة افتراضياً للحفاظ على وضوح المشهد</small></span>
+            </label>
           </div>
-          <div class="form-actions">
-            <button id="startFile" class="primary-button"><span>▶</span> بدء تحليل الفيديو</button>
-            <button id="startLive" class="primary-button" hidden><span>◉</span> بدء جلسة البث</button>
-            <button id="stopJob" class="stop-button" disabled>إيقاف التحليل</button>
+
+          <div class="action-row">
+            <button id="startFile" class="primary-button" type="button"><span>▶</span> بدء التحليل</button>
+            <button id="startLive" class="primary-button" type="button" hidden><span>◉</span> تشغيل البث</button>
+            <button id="stopJob" class="stop-button" type="button" disabled>إيقاف</button>
           </div>
           <div id="capabilityNotice" class="notice" hidden></div>
-        </div>
+        </section>
 
-        <div class="panel monitor-panel">
-          <div class="panel-title">
-            <div><span class="step">02</span><div><h2>شاشة الرادار</h2><p>صورة المعالجة المباشرة مع مربعات التتبع</p></div></div>
-            <span class="live-badge" id="monitorBadge"><i></i> بانتظار المصدر</span>
+        <section class="panel monitor-panel">
+          <div class="panel-heading monitor-heading">
+            <div class="heading-index">02</div>
+            <div class="heading-text"><h2>شاشة الرادار</h2><p>بث الإطارات المعالجة مع تحديد الأجسام</p></div>
+            <span class="live-badge" id="monitorBadge"><i></i> في وضع الاستعداد</span>
           </div>
           <div class="monitor-frame">
             <div class="monitor-grid"></div>
             <div id="monitorPlaceholder" class="monitor-placeholder">
-              <div class="target-icon"><span></span><i></i></div>
-              <b>لا يوجد بث قيد التحليل</b>
-              <small>اختر ملف فيديو من جهازك أو أدخل مصدراً حياً للبدء</small>
+              <div class="radar-ring"><span></span><i></i><b></b></div>
+              <strong>لا توجد جلسة تحليل نشطة</strong>
+              <small>اختر ملف فيديو أو مصدراً حياً لبدء الرصد</small>
             </div>
-            <img id="processedPreview" alt="إطار الفيديو بعد تحليل التتبع" hidden>
+            <img id="processedPreview" alt="الإطار الحالي بعد الكشف والتتبع" hidden>
             <div class="frame-corner corner-a"></div><div class="frame-corner corner-b"></div>
             <div class="frame-corner corner-c"></div><div class="frame-corner corner-d"></div>
             <div class="monitor-overlay"><span id="monitorSource">NO SOURCE</span><span id="monitorClock">--:--:--</span></div>
+            <div class="monitor-watermark">CV / 01</div>
           </div>
-          <div class="progress-area">
-            <div class="progress-info"><span id="jobState">جاهز لاستقبال فيديو</span><b id="progressText">0%</b></div>
+          <div class="progress-block">
+            <div class="progress-info"><span id="jobState">بانتظار اختيار مصدر</span><b id="progressText">0%</b></div>
             <div class="progress-track"><span id="progressBar"></span></div>
-            <div class="progress-meta"><span id="frameProgress">0 إطار</span><span id="processingFps">0 FPS معالجة</span></div>
+            <div class="progress-meta"><span id="frameProgress">0 إطار</span><span id="processingFps">0 FPS</span><span id="metricDuration">—</span></div>
           </div>
           <div id="resultVideoWrap" class="result-video" hidden>
-            <div class="result-title"><b>الفيديو الناتج مع التتبع</b><a id="downloadVideo" href="#" download>تنزيل MP4 ↓</a></div>
+            <div class="result-title"><b>التسجيل المعالج</b><a id="downloadVideo" href="#" download>تنزيل الفيديو <span>↓</span></a></div>
             <video id="resultVideo" controls playsinline></video>
           </div>
-        </div>
+        </section>
       </section>
 
-      <section class="panel analytics-panel">
-        <div class="panel-title">
-          <div><span class="step">03</span><div><h2>التحليل والعدّ</h2><p>الأرقام مستخرجة من هويات التتبع التي شوهدت في الجلسة</p></div></div>
-          <span class="small-tag">TRACKING TELEMETRY</span>
-        </div>
-        <div class="metric-grid">
-          <div class="metric"><small>المركبات المتتبعة</small><strong id="metricVehicles">—</strong><span>هويات Track فريدة</span></div>
-          <div class="metric"><small>الأشخاص المتتبعون</small><strong id="metricPeople">—</strong><span>هويات Track فريدة</span></div>
-          <div class="metric"><small>العبور إلى الأسفل</small><strong id="metricDown">—</strong><span>تجاوز خط العد</span></div>
-          <div class="metric"><small>العبور إلى الأعلى</small><strong id="metricUp">—</strong><span>تجاوز خط العد</span></div>
-          <div class="metric"><small>معدل تحليل الفيديو</small><strong id="metricFps">—</strong><span>إطار/ثانية للمعالجة</span></div>
-          <div class="metric"><small>مدة الفيديو</small><strong id="metricDuration">—</strong><span>زمن المصدر</span></div>
-        </div>
-        <div class="class-counts">
-          <div class="class-title">توزيع أنواع الأجسام المتتبعة</div>
-          <div id="classCountList" class="class-list"><span class="empty-count">تظهر الفئات بعد بدء التحليل</span></div>
-        </div>
-        <div class="limitations">
-          <span>!</span><div><b>معلومة مهمة عن السرعة وقراءة اللوحات</b><p>نموذج YOLO26 العام يستطيع تصنيف السيارة والشاحنة والحافلة والدراجة وتتبعها. أما السرعة الرسمية فتحتاج معايرة مترية خاصة بالكاميرا، وقراءة اللوحات تحتاج كاشف لوحات ونموذج OCR مهيأ لشكل اللوحات المحلي. لن يعرض المختبر أرقام سرعة أو لوحات مختلقة قبل تجهيز هذين المحركين.</p></div>
-        </div>
+      <section class="lower-grid">
+        <section class="panel objects-panel">
+          <div class="panel-heading compact-heading">
+            <div class="heading-index">03</div>
+            <div class="heading-text"><h2>الأجسام النشطة</h2><p>معلومات التتبع الحالية خارج إطار الفيديو</p></div>
+            <span class="heading-tag">LIVE OBJECTS</span>
+          </div>
+          <div class="legend-row"><span><i class="legend-dot vehicle"></i> مركبات</span><span><i class="legend-dot person"></i> أشخاص</span></div>
+          <div id="liveTrackList" class="live-track-list"><div class="empty-state">ستظهر بيانات الأجسام عند بدء المعالجة</div></div>
+        </section>
+
+        <section class="panel intelligence-panel">
+          <div class="panel-heading compact-heading">
+            <div class="heading-index">04</div>
+            <div class="heading-text"><h2>ملخص السمات</h2><p>التصنيف المرئي للمركبات والأجسام</p></div>
+            <span class="heading-tag">ATTRIBUTES</span>
+          </div>
+          <div class="attribute-summary">
+            <div class="attribute-row"><span>فئات المركبات</span><div id="classCountList" class="class-list"><span class="empty-count">لا توجد بيانات بعد</span></div></div>
+            <div class="attribute-row"><span>لون المركبة</span><b>تقدير بصري مع درجة ثقة</b></div>
+            <div class="attribute-row"><span>الماركة والطراز</span><b class="muted-value">يتطلب نموذجاً متخصصاً</b></div>
+          </div>
+          <div class="attribute-footnote">لا يعرض النظام اسم شركة أو طراز سيارة غير مدعوم بنتيجة مصنّف متخصص. تقدير اللون تقريبي وقد يتأثر بالإضاءة والظل.</div>
+        </section>
       </section>
 
-      <footer><span>CYBER SURVEILLANCE SYSTEM</span><span>كل النتائج تجريبية وتحتاج التحقق على فيديوهات حقيقية.</span></footer>
+      <section class="panel reports-panel">
+        <div class="panel-heading compact-heading">
+          <div class="heading-index">05</div>
+          <div class="heading-text"><h2>تقرير هويات التتبع</h2><p>السجلات المحفوظة لكل مركبة أو شخص في الجلسة</p></div>
+          <div class="report-actions"><span id="reportCount" class="heading-tag">0 TRACKS</span><a id="downloadReport" class="export-link" href="#" hidden>تصدير JSON ↓</a></div>
+        </div>
+        <div class="table-scroll">
+          <table class="track-table">
+            <thead><tr><th>المعرّف</th><th>نوع الجسم</th><th>اللون</th><th>الماركة / الطراز</th><th>مدة الرصد</th><th>الإطارات</th><th>الثقة</th><th>عبور الخط</th></tr></thead>
+            <tbody id="trackReportBody"><tr><td colspan="8" class="table-empty">لم يتم حفظ تقارير بعد. ابدأ جلسة تحليل لعرض السجلات.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="report-footer"><span>التقارير تحفظ في قاعدة SQLite الخاصة بجلسة Colab.</span><span id="reportSession">SESSION —</span></div>
+      </section>
+
+      <footer class="app-footer"><span>CYBER SURVEILLANCE SYSTEM <b>·</b> PYTHON CORE</span><span>نتائج الرصد تجريبية وتحتاج التحقق قبل الاستخدام الميداني.</span></footer>
     </main>
   </div>
 </body>
