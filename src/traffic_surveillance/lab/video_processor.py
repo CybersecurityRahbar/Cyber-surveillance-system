@@ -81,7 +81,7 @@ class VideoLabProcessor:
 
         unique_by_class: dict[str, set[int]] = defaultdict(set)
         current_by_class: dict[str, set[int]] = defaultdict(set)
-        unique_vehicle_ids: set[tuple[str, int]] = set()
+        unique_vehicle_ids: set[int] = set()
         unique_person_ids: set[int] = set()
         track_trails: dict[int, deque] = defaultdict(lambda: deque(maxlen=18))
         crossing_counts = {"down": 0, "up": 0}
