@@ -37,6 +37,7 @@ class UltralyticsTrackingBackend:
         self._vehicle_classifier = None
         self._pretrained_attributes_enabled = enable_pretrained_attributes
         self._pretrained_attributes = None
+        self._pretrained_attributes_error = None
         if vehicle_model_path:
             classifier_path = Path(vehicle_model_path)
             if not classifier_path.is_file():
@@ -164,11 +165,17 @@ class UltralyticsTrackingBackend:
                 }
 
         if self._pretrained_attributes_enabled:
-            if self._pretrained_attributes is None:
-                from traffic_surveillance.vision.vehicle_attributes import (
-                    PretrainedVehicleAttributes,
-                )
+            if self._pretrained_attributes is None and not self._pretrained_attributes_error:
+                try:
+                    from traffic_surveillance.vision.vehicle_attributes import (
+                        PretrainedVehicleAttributes,
+                    )
 
-                self._pretrained_attributes = PretrainedVehicleAttributes()
-            predictions.update(self._pretrained_attributes.classify(crop))
+                    self._pretrained_attributes = PretrainedVehicleAttributes()
+                except Exception as exc:
+                    self._pretrained_attributes_error = type(exc).__name__
+            if self._pretrained_attributes is not None:
+                predictions.update(self._pretrained_attributes.classify(crop))
+            elif self._pretrained_attributes_error:
+                predictions["attribute_model_error"] = self._pretrained_attributes_error
         return predictions
