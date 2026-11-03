@@ -6,11 +6,7 @@ from pathlib import Path
 NOTEBOOK_PATH = (
     Path(__file__).resolve().parents[1] / "notebooks" / "Google_Colab_Lab.ipynb"
 )
-TUNNEL_SETUP_MARKERS = (
-    "TUNNEL_PROVIDER =",
-    "NGROK_AUTH_TOKEN =",
-    'if TUNNEL_PROVIDER == "ngrok":',
-)
+TUNNEL_PROVIDER_ASSIGNMENT = 'TUNNEL_PROVIDER = "cloudflare"'
 
 
 def _cell_source(cell: dict) -> str:
@@ -27,11 +23,11 @@ def test_colab_tunnel_configuration_is_an_executable_code_cell() -> None:
     matching_cells = [
         (index, cell, _cell_source(cell))
         for index, cell in enumerate(cells)
-        if any(marker in _cell_source(cell) for marker in TUNNEL_SETUP_MARKERS)
+        if TUNNEL_PROVIDER_ASSIGNMENT in _cell_source(cell)
     ]
 
     assert len(matching_cells) == 1, (
-        "Expected exactly one cell containing the tunnel configuration."
+        "Expected exactly one cell defining the Cloudflare tunnel provider."
     )
     index, cell, source = matching_cells[0]
 
@@ -44,15 +40,15 @@ def test_colab_tunnel_configuration_is_an_executable_code_cell() -> None:
     assert cell.get("outputs", []) == [], (
         "The tunnel setup cell must not contain saved outputs or secrets."
     )
-    assert 'TUNNEL_PROVIDER = "cloudflare"' in source
+    assert "NGROK_AUTH_TOKEN = None" in source
     assert 'if TUNNEL_PROVIDER == "ngrok":' in source
     assert 'elif TUNNEL_PROVIDER != "cloudflare":' in source
 
     markdown_with_setup_code = [
-        index
-        for index, cell in enumerate(cells)
-        if cell.get("cell_type") == "markdown"
-        and any(marker in _cell_source(cell) for marker in TUNNEL_SETUP_MARKERS)
+        cell_index
+        for cell_index, markdown_cell in enumerate(cells)
+        if markdown_cell.get("cell_type") == "markdown"
+        and TUNNEL_PROVIDER_ASSIGNMENT in _cell_source(markdown_cell)
     ]
     assert not markdown_with_setup_code, (
         "Executable tunnel setup code must not be stored in a Markdown cell."
