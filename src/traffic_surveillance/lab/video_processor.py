@@ -457,7 +457,13 @@ class VideoLabProcessor:
                 record["_learned_vehicle_colour"] = learned_colour
             make_prediction = prediction.get("make_model_model") or {}
             custom_prediction = prediction.get("custom_make_model") or {}
-            chosen_make = custom_prediction or make_prediction
+            custom_is_confident = (
+                bool(custom_prediction.get("label"))
+                and custom_prediction.get("confidence", 0) >= 0.42
+            )
+            chosen_make = (
+                custom_prediction if custom_is_confident else make_prediction
+            )
             if chosen_make.get("label") and chosen_make.get("confidence", 0) >= 0.42:
                 model_label = str(chosen_make["label"])
                 details = {
@@ -478,7 +484,7 @@ class VideoLabProcessor:
                 record["_make_model_details"] = details
                 record["_make_model_status"] = (
                     "classified_by_custom_model"
-                    if custom_prediction
+                    if custom_is_confident
                     else "candidate_from_stanford_cars_model"
                 )
                 record["_make_model_top3"] = make_prediction.get("top3", [])
