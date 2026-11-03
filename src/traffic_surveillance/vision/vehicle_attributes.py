@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 from typing import Any
 
 COLOUR_REPOSITORY = "piotreksl/vehicle-color-recognition"
@@ -45,32 +47,34 @@ class PretrainedVehicleAttributes:
         self._make_model_labels: list[str] = []
         self._make_transform = None
         try:
+            mapping_path = (
+                Path(__file__).resolve().parents[3]
+                / "models"
+                / "vehicle"
+                / "twincar_stanford_labels.json"
+            )
+            mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
+            classes = sorted(mapping["classes"], key=lambda item: item["class_id"])
+            labels = [str(item["label"]) for item in classes]
+            if len(labels) != 196 or [item["class_id"] for item in classes] != list(range(196)):
+                raise ValueError("TwinCar label map must contain ordered classes 0..195.")
+
             make_model = timm.create_model(
                 f"hf-hub:{MAKE_MODEL_REPOSITORY}", pretrained=True
             )
-            pretrained_cfg = getattr(make_model, "pretrained_cfg", {}) or {}
-            labels = (
-                pretrained_cfg.get("label_names")
-                or pretrained_cfg.get("classnames")
-                or pretrained_cfg.get("class_names")
+            if int(getattr(make_model, "num_classes", 0)) != len(labels):
+                raise ValueError("TwinCar checkpoint output does not match the label map.")
+            self._make_model_model = make_model.eval().to(self._device)
+            if self._half:
+                self._make_model_model.half()
+            self._make_transform = create_transform(
+                **resolve_model_data_config(self._make_model_model),
+                is_training=False,
             )
-            if isinstance(labels, dict):
-                labels = [
-                    labels[key]
-                    for key in sorted(labels, key=lambda item: int(item))
-                ]
-            if isinstance(labels, (list, tuple)) and len(labels) == 196:
-                self._make_model_model = make_model.eval().to(self._device)
-                if self._half:
-                    self._make_model_model.half()
-                self._make_transform = create_transform(
-                    **resolve_model_data_config(self._make_model_model),
-                    is_training=False,
-                )
-                self._make_model_labels = [str(label) for label in labels]
+            self._make_model_labels = labels
         except Exception:
             # Colour classification remains useful if the optional make/model
-            # checkpoint or its label metadata cannot be resolved.
+            # checkpoint or its label mapping cannot be resolved.
             self._make_model_model = None
 
     @staticmethod
@@ -112,7 +116,11 @@ class PretrainedVehicleAttributes:
         )
 
         colour_index, colour_confidence = colour_predictions[0]
-        colour_label = COLOUR_LABELS[colour_index] if 0 <= colour_index < len(COLOUR_LABELS) else None
+        colour_label = (
+            COLOUR_LABELS[colour_index]
+            if 0 <= colour_index < len(COLOUR_LABELS)
+            else None
+        )
         make_index, make_confidence = make_predictions[0] if make_predictions else (-1, 0.0)
         make_label = (
             self._make_model_labels[make_index]
