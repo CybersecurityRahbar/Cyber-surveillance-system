@@ -49,6 +49,7 @@ ALLOWED_TRACKERS = {
     "deepocsort.yaml",
     "fasttrack.yaml",
     "tracktrack.yaml",
+    "models/trackers/cyber_tracktrack_reid.yaml",
 }
 CHUNK_SIZE = 1024 * 1024
 
@@ -56,7 +57,7 @@ CHUNK_SIZE = 1024 * 1024
 class LiveLabRequest(BaseModel):
     source: str = Field(min_length=1, max_length=2048)
     duration_seconds: int = Field(default=60, ge=10, le=1800)
-    tracker: str = "bytetrack.yaml"
+    tracker: str = "models/trackers/cyber_tracktrack_reid.yaml"
     confidence: float = Field(default=0.25, ge=0.05, le=0.95)
     line_position: float = Field(default=0.65, ge=0.1, le=0.9)
     max_width: int = Field(default=960)
@@ -85,11 +86,19 @@ def _source_label(source: str) -> tuple[str | int, str, str]:
             raise HTTPException(status_code=422, detail="Server camera index must be 0-9.")
         return index, "server_camera", f"Server webcam {index}"
 
+    phone_match = re.fullmatch(r"phone-camera:([A-Za-z0-9_-]{1,48})", source.strip())
+    if phone_match:
+        camera_id = phone_match.group(1)
+        return source.strip(), "phone_camera", f"Phone camera {camera_id}"
+
     parsed = urlsplit(source.strip())
     if parsed.scheme not in {"rtsp", "rtsps"} or not parsed.hostname:
         raise HTTPException(
             status_code=422,
-            detail="Live source must be server-camera:0 or an rtsp:// / rtsps:// URL.",
+            detail=(
+                "Live source must be phone-camera:ID, server-camera:0, "
+                "or an rtsp:// / rtsps:// URL."
+            ),
         )
     try:
         port = f":{parsed.port}" if parsed.port else ""
@@ -128,6 +137,9 @@ def _run_job(
             tracker=tracker,
             confidence=confidence,
             vehicle_model_path=runtime_state.settings.vehicle_model_path,
+            enable_pretrained_attributes=(
+                runtime_state.settings.enable_pretrained_vehicle_attributes
+            ),
         )
         processor = VideoLabProcessor(detector)
 
@@ -244,11 +256,15 @@ async def capabilities(request: Request) -> dict:
             else "not_configured_requires_fine_grained_vehicle_classifier"
         ),
         "phone_streaming": {
-            "media_gateway": "MediaMTX",
-            "recommended_mobile_publish": "WebRTC/WHIP",
-            "python_input": "RTSP pulled from MediaMTX",
+            "transport": "authenticated_websocket_jpeg",
+            "endpoint": "/api/v1/phone/stream/{camera_id}",
+            "source_format": "phone-camera:{camera_id}",
+            "active_streams": len(request.app.state.phone_streams),
             "implemented_in_phone_app": False,
         },
+        "pretrained_vehicle_attributes_enabled": (
+            settings.enable_pretrained_vehicle_attributes
+        ),
     }
 
 
@@ -262,7 +278,7 @@ async def create_video_job(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
-    tracker: str = Form(default="bytetrack.yaml"),
+    tracker: str = Form(default="models/trackers/cyber_tracktrack_reid.yaml"),
     confidence: float = Form(default=0.25, ge=0.05, le=0.95),
     line_position: float = Form(default=0.65, ge=0.1, le=0.9),
     max_width: int = Form(default=960),
@@ -352,6 +368,18 @@ async def create_live_job(
     if payload.max_width not in {960, 1280, 1920}:
         raise HTTPException(status_code=422, detail="max_width must be 960, 1280 or 1920.")
     source, source_type, source_label = _source_label(payload.source)
+    if source_type == "phone_camera":
+        camera_id = source.split(":", 1)[1]
+        stream = request.app.state.phone_streams.get(camera_id)
+        if stream is None or stream.closed:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Phone camera is not connected. Open the companion app and start "
+                    "its secure WebSocket stream first."
+                ),
+            )
+        source = stream
     manager: LabJobManager = request.app.state.lab_jobs
     job_id = manager.create(
         source_type=source_type,
