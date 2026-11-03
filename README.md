@@ -27,12 +27,13 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 
 python -m pip install --upgrade pip
-pip install -e ".[dev,video,vision]"
+pip install -e ".[video,vision]"
 ~~~
 
 يفصل المشروع دعم الفيديو عن نموذج الذكاء الاصطناعي:
-- video: PyAV/FFmpeg وOpenCV لمعالجة الفيديو.
-- vision: Ultralytics YOLO للكشف والتتبع.
+- video: PyAV/FFmpeg لفك ترميز الفيديو.
+- vision: Ultralytics YOLO للكشف والتتبع، ويتضمن اعتماد OpenCV المستخدم في الرسم والمعالجة.
+- dev وtest-video: أدوات الاختبار والفحص، ولا يحتاجها تشغيل المنصة على Colab.
 
 يهيئ المختبر نموذج YOLO26n عند أول عملية تحليل؛ قد يحتاج اتصالاً بالإنترنت لتنزيل الأوزان أول مرة. تُحفظ الأوزان في مخزن Ultralytics المحلي ولا تُرفع إلى GitHub.
 
@@ -48,6 +49,19 @@ uvicorn traffic_surveillance.api.app:app --reload
 - فحص الصحة: http://127.0.0.1:8000/healthz
 
 إعدادات الخادم موجودة في .env.example. يمكن نسخه إلى .env وتعديل الإعدادات محلياً. لا تضع كلمات مرور كاميرات أو مفاتيح حقيقية في المستودع.
+
+
+## تشغيل المنصة على Google Colab
+
+يمكن تشغيل محرك Python وواجهة المختبر على Google Colab بدلاً من تثبيت المكتبات على اللابتوب:
+
+- [فتح دفتر Google Colab](https://colab.research.google.com/github/CybersecurityRahbar/Cyber-surveillance-system/blob/main/notebooks/Google_Colab_Lab.ipynb)
+- اختر GPU من Runtime settings، ثم نفّذ خلايا الدفتر بالترتيب.
+- ينشئ الدفتر خادم FastAPI محليًا داخل Colab ويعرضه عبر Cloudflare Quick Tunnel، مع تعليمات بديلة لـ ngrok.
+- تُحمى API ومهام رفع الفيديو بمفتاح جلسة، بينما رابط الصفحة نفسه مؤقت ويمكن الوصول إليه ممن يملكه.
+- يمكن حفظ نتائج المختبر وقاعدة البيانات في Google Drive اختياريًا. موارد Colab ليست خادمًا دائمًا وقد تنتهي الجلسة.
+
+تفاصيل النشر والحماية: [docs/COLAB_DEPLOYMENT.md](docs/COLAB_DEPLOYMENT.md).
 
 ## كيف يعمل المختبر؟
 

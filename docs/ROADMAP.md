@@ -32,6 +32,17 @@
 - اختبار فيديو synthetic في CI وFake detector دون أوزان حقيقية أو كاميرا فعلية.
 - الخطوة التالية: تجربة المستخدم على فيديو مرور واقعي ثم benchmark CPU/GPU/الذاكرة.
 
+
+## المرحلة 2.1 — بيئة اختبار Google Colab
+**الحالة: ملفات التشغيل جاهزة، بانتظار تجربة المستخدم الفعلية**
+- دفتر Colab لتثبيت محرك الفيديو وYOLO على Runtime مع GPU اختياري.
+- تشغيل FastAPI محليًا داخل الجلسة، مع Cloudflare Quick Tunnel أو ngrok.
+- API key إلزامي لحماية عمليات المختبر عند نشر الرابط العام.
+- اختيار حفظ نتائج المختبر وقاعدة البيانات في Google Drive أو مساحة الجلسة المؤقتة.
+- الخطوة التالية: تشغيل notebook على Colab، رفع فيديو مرور حقيقي، وتسجيل FPS والذاكرة وجودة الكشف والتتبع.
+- حد القبول: فتح الصفحة العامة، التحقق من API key، رفع الفيديو، ظهور preview، توليد MP4، واسترجاع ملخص العدّ.
+
+
 ## المرحلة 3 — Calibration Studio and Traffic Analytics
 - واجهة معايرة camera-specific.
 - RANSAC + inlier validation + reprojection error.

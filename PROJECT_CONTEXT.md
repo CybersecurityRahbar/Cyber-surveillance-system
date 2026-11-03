@@ -1029,3 +1029,26 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - افتح http://127.0.0.1:8000/lab. لا تثبت `.[video]` أو Ultralytics أو PyTorch ما دام الهدف مشاهدة التصميم فقط.
 - لم يتم تغيير كود النظام في هذه الخطوة؛ تم تقديم مسار تشغيل خفيف للواجهة فقط.
 - لم يتم اختبار ذلك على جهاز المستخدم حتى الآن.
+
+
+### 21.13 — الانتقال إلى Google Colab وتجهيز الوصول عبر Tunnel (2026-11-03)
+
+- قرر المستخدم عدم تشغيل المشروع على اللابتوب بسبب كلفة تثبيت الاعتماديات والوقت، واعتمد Google Colab كبيئة تشغيل مركزية مؤقتة، مع رابط عام للواجهة عبر Cloudflare Tunnel أو ngrok.
+- المطلوب تشغيل محرك Python وواجهة الويب معًا داخل Colab ثم اختبار وظائف المختبر الموجودة؛ هذا لا يعني تحويل المنتج إلى Android أو استضافة إنتاجية دائمة.
+- تحقّق بحث Colab: Runtime 2026.10 المنشور من Google يستخدم Python 3.13.18 وهو ضمن نطاق المشروع `>=3.12,<3.14`. موارد GPU والحدود متغيرة، والنسخة المجانية قد تصل إلى 12 ساعة كحد أقصى وفق النمط والتوفر، وليس ضمانًا بمدة ثابتة. المصادر: https://research.google.com/colaboratory/faq.html وhttps://research.google.com/colaboratory/runtime-version-faq.html
+- تحقّق الأنفاق:
+  - Cloudflare Quick Tunnel يعطي رابط `trycloudflare.com` مؤقتًا دون حساب أو نطاق؛ يتوقف مع عملية cloudflared، ومخصص للتطوير والاختبار. الرابط العام متاح لمن يعرفه، ويمكن تقييده بالبريد عبر `--allowed-mail` حسب الوثائق. المصادر: https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/ وhttps://blog.cloudflare.com/protected-quick-tunnels
+  - ngrok يحتاج حسابًا ورمز Auth Token. صفحة الحدود المجانية تعرض 1GB data out و20,000 HTTP requests شهريًا؛ قد تتغير الحدود. المصدر: https://ngrok.com/docs/pricing-limits
+- تمت مراجعة app.py وlab_routes.py وauth.py وconfig.py وlab.html وlab.js وpyproject.toml والاختبارات.
+- تبيّن أن /lab والأصول الثابتة لا تحتاج PyTorch؛ استيراد Ultralytics يحدث عند بدء مهمة التحليل لا عند تقديم الصفحة.
+- عُدلت الواجهة لإعادة طلب capabilities عند تغيير حقل API key، حتى يتمكن المستخدم من فتح الصفحة أولاً وإدخال المفتاح ثم تحديث حالة الاتصال دون إعادة تحميل.
+- أضيف اختبار API يثبت أن /lab وlab-assets تظل متاحة، وأن /api/v1/lab/capabilities ترفض الطلب دون X-API-Key وتقبل المفتاح الصحيح.
+- أضيف دفتر `notebooks/Google_Colab_Lab.ipynb` يتضمن فحص Python/GPU، تنزيل main، تثبيت PyAV وUltralytics المثبت، اختيار حفظ بيانات المختبر في Drive أو مساحة runtime، إدخال API key مخفي، تشغيل Uvicorn على 127.0.0.1، وتشغيل Cloudflare Quick Tunnel أو بديل ngrok، وإرشادات الاستخدام والإيقاف.
+- فُصل اعتماد OpenCV عن runtime:
+  - `video` extra يحتوي PyAV.
+  - `vision` extra يحتوي Ultralytics، الذي يجلب opencv-python كاعتماد runtime.
+  - أضيف `test-video` extra لتوفير OpenCV عند الاختبارات الاصطناعية دون تثبيت PyTorch.
+  - عُدّل CI لتثبيت `.[dev,video,test-video]`.
+- تم تحديث README وROADMAP وإضافة docs/COLAB_DEPLOYMENT.md.
+- تنبيه: ملفات التشغيل جاهزة في GitHub، لكن دفتر Colab لم يُشغّل في حساب المستخدم بعد؛ لا نسجل نجاح GPU/tunnel/inference قبل الاختبار الفعلي. يلزم التحقق من CI على commit المطابق قبل إعلان نجاح الاختبارات.
+- لا تتغير حدود المنتج: ANPR، السرعة المترية بعد معايرة، إدارة أسطول كاميرات، مركز العمليات النهائي، وcross-camera ReID لم تُنفذ بعد. Colab يسهّل اختبار الوظائف الموجودة ولا يكمل هذه الميزات تلقائيًا.
