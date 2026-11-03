@@ -249,7 +249,7 @@
   async function startLiveJob() {
     const source = $("liveSource").value.trim();
     if (!source) {
-      setNotice("أدخل عنوان RTSP أو server-camera:0.");
+      setNotice("أدخل RTSP أو server-camera:0 أو phone-camera:road-01.");
       return;
     }
     resetResult();
@@ -545,7 +545,8 @@
           ? "مصنّف مخصص متصل"
           : "النماذج المتخصصة غير مفعّلة في إعدادات الخادم";
       $("makeModelAvailability").classList.toggle(
-        "muted-value", !info.vehicle_make_model_configured
+        "muted-value",
+        !info.pretrained_vehicle_attributes_enabled && !info.vehicle_make_model_configured
       );
       if (!info.processing_ready) {
         setNotice(
@@ -557,6 +558,7 @@
       } else {
         setNotice("", false);
       }
+      await loadSavedReports();
     } catch (error) {
       $("backendStatus").textContent = "أدخل مفتاح API";
       setNotice("أدخل مفتاح الجلسة الصحيح في الحقل العلوي لتفعيل واجهات التحليل.");
