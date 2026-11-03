@@ -15,11 +15,24 @@ def test_twin_car_prediction_preserves_make_model_and_year_metadata():
     classifier._colour_transform = None
     classifier._make_model_model = "make-model"
     classifier._make_transform = None
-    classifier._make_model_labels = ["Toyota Camry 2012", "Toyota Corolla 2011", "Honda Accord 2012"]
+    classifier._make_model_labels = [
+        "Toyota Camry 2012",
+        "Toyota Corolla 2011",
+        "Honda Accord 2012",
+    ]
     classifier._make_model_classes = [
-        {"class_id": 0, "label": "Toyota Camry 2012", "make": "Toyota", "model": "Camry", "year": "2012"},
-        {"class_id": 1, "label": "Toyota Corolla 2011", "make": "Toyota", "model": "Corolla", "year": "2011"},
-        {"class_id": 2, "label": "Honda Accord 2012", "make": "Honda", "model": "Accord", "year": "2012"},
+        {
+            "class_id": 0, "label": "Toyota Camry 2012",
+            "make": "Toyota", "model": "Camry", "year": "2012",
+        },
+        {
+            "class_id": 1, "label": "Toyota Corolla 2011",
+            "make": "Toyota", "model": "Corolla", "year": "2011",
+        },
+        {
+            "class_id": 2, "label": "Honda Accord 2012",
+            "make": "Honda", "model": "Accord", "year": "2012",
+        },
     ]
 
     result = classifier.classify(np.zeros((32, 32, 3), dtype=np.uint8))
