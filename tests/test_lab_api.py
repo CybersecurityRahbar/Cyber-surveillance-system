@@ -27,6 +27,7 @@ def test_lab_ui_and_capabilities_are_available(tmp_path):
     assert capabilities.status_code == 200
     assert capabilities.json()["model"] == "yolo26n.pt"
     assert capabilities.json()["phone_streaming"]["media_gateway"] == "MediaMTX"
+    assert capabilities.json()["vehicle_make_model_configured"] is False
 
 
 def test_live_source_validation_rejects_non_stream_urls(tmp_path):

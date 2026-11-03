@@ -183,9 +183,15 @@
         colourText = "—";
       }
       row.appendChild(makeCell(colourText));
-      row.appendChild(makeCell(track.object_type === "vehicle"
-        ? "غير متاح — لا يوجد مصنّف"
-        : "—"));
+      let modelText = "—";
+      if (track.object_type === "vehicle") {
+        const predictedModel = track.make_model
+          || [track.make, track.model].filter(Boolean).join(" ");
+        modelText = predictedModel
+          ? predictedModel + " · " + Math.round((track.make_model_confidence || 0) * 100) + "%"
+          : "غير متاح — المصنّف غير مهيأ";
+      }
+      row.appendChild(makeCell(modelText));
       row.appendChild(makeCell(Number(track.duration_seconds || 0).toFixed(1) + " ث"));
       row.appendChild(makeCell(String(track.frames_seen || 0)));
       row.appendChild(makeCell(Math.round((track.average_confidence || 0) * 100) + "%"));
@@ -431,6 +437,12 @@
       $("backendStatus").textContent = info.processing_ready
         ? "محرك الكشف جاهز"
         : "حزم ناقصة: " + info.missing_packages.join(", ");
+      $("makeModelAvailability").textContent = info.vehicle_make_model_configured
+        ? "مصنّف الماركة والطراز متصل"
+        : "يتطلب أوزان مصنّف متخصص";
+      $("makeModelAvailability").classList.toggle(
+        "muted-value", !info.vehicle_make_model_configured
+      );
       if (!info.processing_ready) {
         setNotice(
           "بيئة التحليل غير مكتملة. الحزم المطلوبة: " +
