@@ -1125,3 +1125,42 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
   - SQLite persistence after store reopen.
   - Node.js syntax and notebook JSON validation in GitHub CI.
 - يجب فحص CI على الالتزام الحالي قبل إعلان نجاح الاختبارات. دفتر Colab لم يُشغّل من حساب المستخدم بعد، ومصنف الماركة/الطراز لم يُختبر مع أوزان مخصصة.
+
+
+### 21.18 — نتيجة التحقق من تحسينات المختبر النهائية (2026-11-03)
+
+- الالتزام البرمجي المختبر: `f6edc0dd567a3de3c3177b38c90e9056d7e268bc`.
+- GitHub Actions Run ID: `41690208903`, الحالة success.
+- Ruff: All checks passed.
+- JavaScript syntax: success.
+- Notebook JSON validation: success.
+- Pytest: `15 passed, 1 warning in 2.01s`.
+- رابط CI: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41690208903
+- الاختبارات الجديدة تغطي:
+  - اكتشاف وتقرير Track للمركبة والشخص.
+  - الاحتفاظ بمسارات track وسمات اللون في تقرير الجلسة.
+  - تقدير الأبيض والأسود بعد إصلاح استبعاد القيم العالية/المنخفضة.
+  - بث MJPEG multipart واستجابات تقارير API.
+  - بقاء تقارير الجلسات وهويات Track بعد إعادة فتح SQLite.
+  - القدرات الافتراضية لمصنف الماركة/الطراز (غير مهيأ ما لم يتم توفير ملف).
+- إصلاحات CI في الطريق:
+  - فشل سابق Ruff E501 في سطر استدعاء المصنف (107 chars)؛ قُسّم السطر وأصبح Ruff ناجحاً.
+  - تحديث اختبار واجهة HTML ليتوافق مع الوسم الجديد الذي يحتوي عنصر em.
+  - بناء JPEG test fixture باستخدام bytes([255,216]) بدلاً من سلسلة escaped غير صحيحة.
+- آخر واجهة HTML/JS/CSS:
+  - غرفة عمليات RTL داكنة حديثة مع responsive layout.
+  - مؤشرات مركبات/أشخاص/عبور/FPS.
+  - MJPEG streaming بدلاً من استقصاء صورة كل 750ms؛ الحد الأقصى للمعاينة يقارب 12fps، مع جودة JPEG 68، بينما يبقى MP4 النهائي بمعدل مصدر الفيديو. 12fps قيمة سقف لتقليل ضغط tunnel وليست benchmark FPS مضمون.
+  - قائمة أجسام نشطة خارج الفيديو؛ علامات صغيرة فوق الأجسام؛ سيارة أخضر وشخص أزرق.
+  - HUD مخفي افتراضياً ويمكن تفعيله بخيار.
+  - جدول تقارير Track وتصدير JSON؛ يظهر make/model إن تم توفير classifier مناسب، وإلا تبقى النتيجة غير متاحة.
+- Colab:
+  - دفتر آخر خلية supervisor يبقي التنفيذ Running مع فحص health/server/tunnel كل 20 ثانية.
+  - تم إصلاح نمط regex Cloudflare trycloudflare.
+  - أضيف خيار `VEHICLE_CLASSIFIER_PATH` في الدفتر لتوفير أوزان classification مخصصة من Drive أو Runtime.
+- ما لم يُختبر بعد:
+  - لم يفتح المساعد Runtime فعلياً داخل حساب المستخدم، ولم تُختبر الخلية النشطة في الجلسة الحقيقية.
+  - لم يُجرَ benchmark live/Colab FPS أو latency عبر Cloudflare/ngrok، لذلك لا نضمن سلاسة فعلية 25/30fps.
+  - لم تُختبر أوزان ماركة/طراز فعلية؛ hook يعمل فقط مع ملف Ultralytics task=classify مناسب. لم تُرفق أي أوزان أو بيانات تدريب باسم Toyota Hilux / Hyundai Tucson / Mercedes G-Class.
+  - تقدير اللون HSV heuristic تقريبي وليس مصنفاً مدرباً، وقد يتأثر بالظلال/الإضاءة والجزء الظاهر من المركبة.
+- يجب أن يفتح المستخدم دفتر Colab المحدث، ينفذ الخلايا من البداية، ويختبر فيديو واقعي قصير. عندها نحتاج قياس processing_fps ومعدل تحديث الرادار وتأخر المعاينة، ومقارنة العد/التتبع يدوياً.
