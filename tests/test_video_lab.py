@@ -130,7 +130,8 @@ def test_vehicle_id_is_counted_once_when_detector_class_label_changes(tmp_path):
     )
 
     assert summary["unique_vehicle_tracks"] == 1
-    assert summary["class_counts"] == {"CAR": 1, "TRUCK": 1}
+    assert summary["class_counts"] == {"CAR": 1}
+    assert summary["tracks"][0]["class_label"] == "CAR"
     assert output.is_file()
 
 
