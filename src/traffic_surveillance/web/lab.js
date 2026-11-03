@@ -8,12 +8,16 @@
     previewUrl: null,
     videoUrl: null,
     reportUrl: null,
+    sourceUrl: null,
+    sourcePlaybackMode: false,
+    analysisView: false,
+    selectedReportId: null,
   };
   const terminal = new Set(["completed", "stopped", "failed"]);
   const colourNames = {
-    white: "أبيض", black: "أسود", grey: "رمادي", silver: "فضي",
-    red: "أحمر", orange: "برتقالي", yellow: "أصفر", green: "أخضر",
-    blue: "أزرق", purple: "بنفسجي",
+    beige: "بيج", white: "أبيض", black: "أسود", grey: "رمادي", silver: "فضي",
+    brown: "بني", gold: "ذهبي", red: "أحمر", orange: "برتقالي",
+    yellow: "أصفر", green: "أخضر", blue: "أزرق", pink: "وردي", purple: "بنفسجي",
   };
 
   function headers(extra = {}) {
@@ -68,6 +72,12 @@
     stopPreviewStream();
     state.jobId = null;
     $("processedPreview").hidden = true;
+    $("sourcePlayback").pause();
+    $("sourcePlayback").hidden = true;
+    $("analysisModeNote").hidden = true;
+    $("toggleAnalysisView").hidden = true;
+    state.sourcePlaybackMode = false;
+    state.analysisView = false;
     $("monitorPlaceholder").hidden = false;
     $("resultVideoWrap").hidden = true;
     $("resultVideo").removeAttribute("src");
@@ -96,6 +106,15 @@
     const up = Number(job?.line_crossings?.up || 0);
     $("metricCrossings").textContent = job ? String(down + up) : "—";
     $("metricFps").textContent = job ? (job.processing_fps ?? "0") : "—";
+    const sourceFps = Number(job?.source_fps || job?.result?.source_fps || 0);
+    const processingFps = Number(job?.processing_fps || job?.result?.processing_fps || 0);
+    const realtimeFactor = sourceFps > 0 ? processingFps / sourceFps : 0;
+    $("metricRealtime").textContent = job
+      ? realtimeFactor.toFixed(2) + "× زمن المصدر"
+      : "— × زمن المصدر";
+    $("metricDropped").textContent = String(
+      job?.input_frames_dropped ?? job?.result?.input_frames_dropped ?? 0
+    ) + " إطار ساقط";
     $("metricDuration").textContent = job?.result
       ? job.result.media_duration_seconds.toFixed(1) + " sec"
       : "—";
@@ -219,7 +238,7 @@
     try {
       const response = await api("/api/v1/lab/jobs", { method: "POST", body: form });
       const job = await response.json();
-      beginWatching(job.job_id, job.filename);
+      beginWatching(job.job_id, job.filename, true);
       setNotice("", false);
     } catch (error) {
       setNotice(error.message);
@@ -251,7 +270,7 @@
         body: JSON.stringify(payload),
       });
       const job = await response.json();
-      beginWatching(job.job_id, job.source_label);
+      beginWatching(job.job_id, job.source_label, false);
       setNotice("", false);
     } catch (error) {
       setNotice(error.message);
@@ -259,13 +278,25 @@
     }
   }
 
-  function beginWatching(jobId, sourceLabel) {
+  function beginWatching(jobId, sourceLabel, sourcePlaybackMode = false) {
     state.jobId = jobId;
+    state.sourcePlaybackMode = sourcePlaybackMode;
+    state.analysisView = false;
     $("monitorSource").textContent = sourceLabel;
     $("monitorPlaceholder").hidden = true;
-    $("processedPreview").hidden = false;
+    $("sourcePlayback").hidden = !sourcePlaybackMode;
+    $("processedPreview").hidden = sourcePlaybackMode;
+    $("analysisModeNote").hidden = !sourcePlaybackMode;
+    $("toggleAnalysisView").hidden = !sourcePlaybackMode;
+    if (sourcePlaybackMode && state.sourceUrl) {
+      $("sourcePlayback").src = state.sourceUrl;
+      $("sourcePlayback").currentTime = 0;
+      $("sourcePlayback").play().catch(() => {});
+      $("monitorBadge").innerHTML = "<i></i> تشغيل المصدر · التحليل بالخلفية";
+    } else {
+      $("monitorBadge").innerHTML = "<i></i> بث الإطارات المحللة";
+    }
     $("monitorBadge").classList.add("running");
-    $("monitorBadge").innerHTML = "<i></i> بث المعالجة نشط";
     $("stopJob").disabled = false;
     $("jobState").textContent = "تم إنشاء جلسة المعالجة";
     $("startFile").disabled = true;
@@ -357,8 +388,14 @@
           ? "<i></i> فشلت المعالجة"
           : "<i></i> اكتملت الجلسة";
         if (job.status === "completed" || job.status === "stopped") {
+          $("sourcePlayback").pause();
+          $("sourcePlayback").hidden = true;
+          $("processedPreview").hidden = true;
+          $("analysisModeNote").hidden = true;
+          $("toggleAnalysisView").hidden = true;
           await loadOutput(jobId);
           await loadTrackReports(jobId);
+          await loadSavedReports();
           $("jobState").textContent = job.status === "stopped"
             ? "تم إيقاف الجلسة يدوياً"
             : "اكتملت المعالجة بنجاح";
@@ -378,6 +415,11 @@
     $("progressText").textContent = progress.toFixed(1) + "%";
     $("frameProgress").textContent = (job.frames_processed || 0) + " إطار";
     $("processingFps").textContent = (job.processing_fps || 0) + " FPS";
+    const ratio = Number(job.source_fps) > 0
+      ? Number(job.processing_fps || 0) / Number(job.source_fps)
+      : 0;
+    $("metricRealtime").textContent = ratio.toFixed(2) + "× زمن المصدر";
+    $("metricDropped").textContent = String(job.input_frames_dropped || 0) + " إطار ساقط";
     $("jobState").textContent = job.status === "running"
       ? "يتم الكشف والتتبع وتحليل الحركة..."
       : job.status === "queued"
@@ -419,6 +461,66 @@
     $("downloadReport").hidden = false;
   }
 
+  async function loadSavedReports() {
+    const select = $("savedReportSelect");
+    const previous = state.selectedReportId || select.value;
+    try {
+      const response = await api("/api/v1/lab/reports?limit=100");
+      const reports = await response.json();
+      select.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = reports.length
+        ? "اختر جلسة محفوظة لعرض تفاصيلها"
+        : "لا توجد جلسات محفوظة";
+      select.appendChild(placeholder);
+      for (const report of reports) {
+        const option = document.createElement("option");
+        option.value = report.session_id;
+        const date = report.finished_at || report.started_at || "";
+        const vehicles = report.summary?.unique_vehicle_tracks ?? 0;
+        const people = report.summary?.unique_person_tracks ?? 0;
+        option.textContent = date.slice(0, 19).replace("T", " ")
+          + " · " + report.filename + " · " + vehicles + " مركبة / " + people + " شخص";
+        select.appendChild(option);
+      }
+      if (reports.some((item) => item.session_id === previous)) {
+        select.value = previous;
+      } else if (reports.length) {
+        select.value = reports[0].session_id;
+      }
+      if (select.value) {
+        state.selectedReportId = select.value;
+        await loadSavedReport(select.value);
+      }
+    } catch (error) {
+      select.innerHTML = '<option value="">تعذر تحميل السجلات — تحقق من المفتاح</option>';
+      setNotice("تعذر تحميل سجل الجلسات: " + error.message);
+    }
+  }
+
+  async function loadSavedReport(sessionId) {
+    const [reportResponse, tracksResponse] = await Promise.all([
+      api("/api/v1/lab/reports/" + sessionId),
+      api("/api/v1/lab/reports/" + sessionId + "/tracks"),
+    ]);
+    const report = await reportResponse.json();
+    const tracks = await tracksResponse.json();
+    state.selectedReportId = sessionId;
+    renderTrackReport(tracks);
+    $("reportSession").textContent =
+      "SESSION " + sessionId.slice(0, 8).toUpperCase() + " · " + report.status;
+    const url = URL.createObjectURL(new Blob(
+      [JSON.stringify({ report, tracks }, null, 2)],
+      { type: "application/json" }
+    ));
+    if (state.reportUrl) URL.revokeObjectURL(state.reportUrl);
+    state.reportUrl = url;
+    $("downloadReport").href = url;
+    $("downloadReport").download = "traffic-report-" + sessionId.slice(0, 8) + ".json";
+    $("downloadReport").hidden = false;
+  }
+
   async function stopJob() {
     if (!state.jobId) return;
     try {
@@ -437,9 +539,11 @@
       $("backendStatus").textContent = info.processing_ready
         ? "محرك الكشف جاهز"
         : "حزم ناقصة: " + info.missing_packages.join(", ");
-      $("makeModelAvailability").textContent = info.vehicle_make_model_configured
-        ? "مصنّف الماركة والطراز متصل"
-        : "يتطلب أوزان مصنّف متخصص";
+      $("makeModelAvailability").textContent = info.pretrained_vehicle_attributes_enabled
+        ? "نماذج اللون والماركة تُحمّل بعد معالجة الفيديو"
+        : info.vehicle_make_model_configured
+          ? "مصنّف مخصص متصل"
+          : "النماذج المتخصصة غير مفعّلة في إعدادات الخادم";
       $("makeModelAvailability").classList.toggle(
         "muted-value", !info.vehicle_make_model_configured
       );
@@ -465,6 +569,7 @@
     if (key) {
       sessionStorage.setItem("trafficLabApiKey", key);
       loadCapabilities();
+      loadSavedReports();
     } else {
       sessionStorage.removeItem("trafficLabApiKey");
       $("backendStatus").textContent = "بانتظار مفتاح API";
@@ -477,6 +582,37 @@
   $("startFile").addEventListener("click", startFileJob);
   $("startLive").addEventListener("click", startLiveJob);
   $("stopJob").addEventListener("click", stopJob);
+  $("refreshReports").addEventListener("click", loadSavedReports);
+  $("savedReportSelect").addEventListener("change", () => {
+    const sessionId = $("savedReportSelect").value;
+    if (sessionId) loadSavedReport(sessionId).catch((error) => setNotice(error.message));
+  });
+  $("fullscreenMonitor").addEventListener("click", async () => {
+    const frame = document.querySelector(".monitor-frame");
+    try {
+      if (!document.fullscreenElement) {
+        await frame.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      setNotice("تعذر تفعيل ملء الشاشة: " + error.message);
+    }
+  });
+  $("toggleAnalysisView").addEventListener("click", () => {
+    state.analysisView = !state.analysisView;
+    $("sourcePlayback").hidden = state.analysisView;
+    $("processedPreview").hidden = !state.analysisView;
+    $("analysisModeNote").hidden = state.analysisView;
+    $("toggleAnalysisView").textContent = state.analysisView
+      ? "عرض الفيديو الأصلي"
+      : "عرض إطار التحليل";
+    if (state.analysisView) {
+      $("sourcePlayback").pause();
+    } else {
+      $("sourcePlayback").play().catch(() => {});
+    }
+  });
   $("confidence").addEventListener("input", () =>
     $("confidenceValue").textContent = $("confidence").value + "%"
   );
@@ -489,9 +625,10 @@
     $("selectedFile").textContent = file.name;
     $("fileMeta").textContent = file.name;
     $("filePreviewWrap").hidden = false;
-    const old = $("localPreview").src;
-    if (old.startsWith("blob:")) URL.revokeObjectURL(old);
-    $("localPreview").src = URL.createObjectURL(file);
+    if (state.sourceUrl) URL.revokeObjectURL(state.sourceUrl);
+    state.sourceUrl = URL.createObjectURL(file);
+    $("localPreview").src = state.sourceUrl;
+    $("sourcePlayback").src = state.sourceUrl;
     $("localPreview").onloadedmetadata = () => {
       $("fileDimensions").textContent =
         $("localPreview").videoWidth + " × " + $("localPreview").videoHeight +
