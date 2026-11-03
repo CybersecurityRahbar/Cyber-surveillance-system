@@ -135,6 +135,43 @@ def test_vehicle_id_is_counted_once_when_detector_class_label_changes(tmp_path):
     assert output.is_file()
 
 
+class WeakCustomClassifierDetector(MovingVehicleDetector):
+    def classify_vehicle_crop(self, crop):
+        return {
+            "custom_make_model": {
+                "label": "Uncertain Make",
+                "confidence": 0.2,
+            },
+            "make_model_model": {
+                "label": "Toyota Camry 2012",
+                "confidence": 0.93,
+                "make": "Toyota",
+                "model": "Camry",
+                "year": "2012",
+                "top3": [],
+            },
+        }
+
+
+def test_pretrained_make_model_is_used_when_custom_classifier_is_uncertain(tmp_path):
+    source = tmp_path / "sample.mp4"
+    output = tmp_path / "processed.mp4"
+    create_test_video(source)
+
+    summary = VideoLabProcessor(WeakCustomClassifierDetector()).run(
+        source,
+        output,
+        line_position=0.5,
+        max_width=960,
+    )
+
+    vehicle = next(item for item in summary["tracks"] if item["track_id"] == 42)
+    assert vehicle["make"] == "Toyota"
+    assert vehicle["model"] == "Camry"
+    assert vehicle["vehicle_year_estimate"] == "2012"
+    assert vehicle["make_model_status"] == "candidate_from_stanford_cars_model"
+
+
 def test_vehicle_colour_estimator_keeps_white_and_black_pixels():
     from traffic_surveillance.domain.models import BoundingBox
     from traffic_surveillance.vision.appearance import estimate_vehicle_color
