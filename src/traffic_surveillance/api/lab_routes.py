@@ -249,10 +249,14 @@ async def capabilities(request: Request) -> dict:
         "preview_transport": "mjpeg_stream",
         "vehicle_colour": "estimated_from_track_frames",
         "vehicle_make_model_configured": bool(
-            settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file()
+            (settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file())
+            or settings.enable_pretrained_vehicle_attributes
         ),
         "make_model_recognition": (
-            "ready" if settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file()
+            "custom_classifier_ready"
+            if settings.vehicle_model_path and Path(settings.vehicle_model_path).is_file()
+            else "pretrained_candidate_model_enabled"
+            if settings.enable_pretrained_vehicle_attributes
             else "not_configured_requires_fine_grained_vehicle_classifier"
         ),
         "phone_streaming": {
@@ -260,7 +264,8 @@ async def capabilities(request: Request) -> dict:
             "endpoint": "/api/v1/phone/stream/{camera_id}",
             "source_format": "phone-camera:{camera_id}",
             "active_streams": len(request.app.state.phone_streams),
-            "implemented_in_phone_app": False,
+            "implemented_in_phone_app": True,
+            "app_status": "prototype_foreground_activity_required",
         },
         "pretrained_vehicle_attributes_enabled": (
             settings.enable_pretrained_vehicle_attributes
