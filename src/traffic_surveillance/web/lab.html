@@ -134,7 +134,7 @@
           <div id="liveMode" class="mode-content" hidden>
             <label class="field-label" for="liveSource">عنوان مصدر RTSP</label>
             <input id="liveSource" class="text-input" dir="ltr" placeholder="rtsp://192.168.1.20:8554/stream">
-            <div class="hint">يمكن استخدام RTSP أو كاميرا متصلة بالخادم مثل server-camera:0. يجب أن يكون المصدر متاحاً من بيئة Colab.</div>
+            <div class="hint">RTSP أو server-camera:0 أو phone-camera:road-01. لتوصيل الهاتف: افتح تطبيق CyberVision Camera وابدأ البث أولاً، ثم استخدم phone-camera:road-01 هنا.</div>
             <div class="inline-fields">
               <label><span>مدة الجلسة</span><select id="liveDuration"><option value="30">30 ثانية</option><option value="60" selected>دقيقة واحدة</option><option value="180">3 دقائق</option><option value="300">5 دقائق</option></select></label>
               <label><span>دقة العرض والمعالجة</span><select id="liveWidth"><option value="960" selected>960px</option><option value="1280">1280px</option><option value="1920">1920px</option></select></label>
@@ -147,7 +147,8 @@
             <div class="field-grid">
               <label><span>خوارزمية التتبع</span>
                 <select id="tracker">
-                  <option value="bytetrack.yaml" selected>ByteTrack · سريع</option>
+                  <option value="models/trackers/cyber_tracktrack_reid.yaml" selected>Cyber TrackTrack + ReID · هوية واسترجاع</option>
+                  <option value="bytetrack.yaml">ByteTrack · سريع</option>
                   <option value="botsort.yaml">BoT-SORT · حركة الكاميرا</option>
                   <option value="ocsort.yaml">OC-SORT · حركة غير خطية</option>
                   <option value="deepocsort.yaml">Deep OC-SORT · Re-ID</option>
@@ -185,8 +186,12 @@
         <section class="panel monitor-panel">
           <div class="panel-heading monitor-heading">
             <div class="heading-index">02</div>
-            <div class="heading-text"><h2>شاشة الرادار</h2><p>بث الإطارات المعالجة مع تحديد الأجسام</p></div>
-            <span class="live-badge" id="monitorBadge"><i></i> في وضع الاستعداد</span>
+            <div class="heading-text"><h2>شاشة الرادار</h2><p>الفيديو الأصلي بسلاسة أو آخر إطار خضع للتحليل</p></div>
+            <div class="monitor-actions">
+              <button id="toggleAnalysisView" class="secondary-button" type="button" hidden>عرض إطار التحليل</button>
+              <button id="fullscreenMonitor" class="secondary-button" type="button">⛶ ملء الشاشة</button>
+              <span class="live-badge" id="monitorBadge"><i></i> في وضع الاستعداد</span>
+            </div>
           </div>
           <div class="monitor-frame">
             <div class="monitor-grid"></div>
@@ -195,7 +200,11 @@
               <strong>لا توجد جلسة تحليل نشطة</strong>
               <small>اختر ملف فيديو أو مصدراً حياً لبدء الرصد</small>
             </div>
+            <video id="sourcePlayback" class="source-playback" muted playsinline hidden></video>
             <img id="processedPreview" alt="الإطار الحالي بعد الكشف والتتبع" hidden>
+            <div id="analysisModeNote" class="analysis-mode-note" hidden>
+              تشغيل الفيديو الأصلي بسرعة المصدر. تحليل الذكاء الاصطناعي يعمل بالتوازي؛ اعرض آخر إطار محلل عند الحاجة.
+            </div>
             <div class="frame-corner corner-a"></div><div class="frame-corner corner-b"></div>
             <div class="frame-corner corner-c"></div><div class="frame-corner corner-d"></div>
             <div class="monitor-overlay"><span id="monitorSource">NO SOURCE</span><span id="monitorClock">--:--:--</span></div>
@@ -204,7 +213,7 @@
           <div class="progress-block">
             <div class="progress-info"><span id="jobState">بانتظار اختيار مصدر</span><b id="progressText">0%</b></div>
             <div class="progress-track"><span id="progressBar"></span></div>
-            <div class="progress-meta"><span id="frameProgress">0 إطار</span><span id="processingFps">0 FPS</span><span id="metricDuration">—</span></div>
+            <div class="progress-meta"><span id="frameProgress">0 إطار</span><span id="processingFps">0 FPS</span><span id="metricRealtime">— × زمن المصدر</span><span id="metricDropped">0 إطار ساقط</span><span id="metricDuration">—</span></div>
           </div>
           <div id="resultVideoWrap" class="result-video" hidden>
             <div class="result-title"><b>التسجيل المعالج</b><a id="downloadVideo" href="#" download>تنزيل الفيديو <span>↓</span></a></div>
@@ -243,7 +252,14 @@
         <div class="panel-heading compact-heading">
           <div class="heading-index">05</div>
           <div class="heading-text"><h2>تقرير هويات التتبع</h2><p>السجلات المحفوظة لكل مركبة أو شخص في الجلسة</p></div>
-          <div class="report-actions"><span id="reportCount" class="heading-tag">0 TRACKS</span><a id="downloadReport" class="export-link" href="#" hidden>تصدير JSON ↓</a></div>
+          <div class="report-actions">
+            <select id="savedReportSelect" class="history-select" aria-label="الجلسات المحفوظة">
+              <option value="">تحميل السجلات المحفوظة…</option>
+            </select>
+            <button id="refreshReports" class="secondary-button" type="button">تحديث السجلات</button>
+            <span id="reportCount" class="heading-tag">0 TRACKS</span>
+            <a id="downloadReport" class="export-link" href="#" hidden>تصدير JSON ↓</a>
+          </div>
         </div>
         <div class="table-scroll">
           <table class="track-table">
