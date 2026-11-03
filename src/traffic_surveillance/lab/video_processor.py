@@ -79,7 +79,6 @@ class VideoLabProcessor:
         line_counter = None
         line_y = None
 
-        unique_by_class: dict[str, set[int]] = defaultdict(set)
         current_by_class: dict[str, set[int]] = defaultdict(set)
         unique_vehicle_ids: set[int] = set()
         unique_person_ids: set[int] = set()
@@ -219,6 +218,7 @@ class VideoLabProcessor:
                                 "track_id": track_id,
                                 "object_type": object_type,
                                 "class_label": display_label,
+                                "_class_label_votes": {},
                                 "first_frame_index": frame_index,
                                 "last_frame_index": frame_index,
                                 "first_seen_seconds": round(media_time, 3),
@@ -238,6 +238,13 @@ class VideoLabProcessor:
                                 "_make_model_attempts": 0,
                             },
                         )
+                        label_votes = record["_class_label_votes"]
+                        label_votes[display_label] = (
+                            label_votes.get(display_label, 0.0) + detection.confidence
+                        )
+                        record["class_label"] = max(
+                            label_votes.items(), key=lambda item: item[1]
+                        )[0]
                         record["frames_seen"] += 1
                         record["last_frame_index"] = frame_index
                         record["last_seen_seconds"] = round(media_time, 3)
@@ -292,7 +299,6 @@ class VideoLabProcessor:
 
                     current_by_class[label].add(track_id)
                     if label in VEHICLE_CLASSES:
-                        unique_by_class[label].add(track_id)
                         unique_vehicle_ids.add(track_id)
                         foot = (
                             (detection.box.x1 + detection.box.x2) / 2.0,
@@ -384,10 +390,7 @@ class VideoLabProcessor:
                                 processed_frames / max(monotonic() - start_clock, 1e-6), 2
                             ),
                             "source_fps": round(fps_source, 2),
-                            "class_counts": {
-                                CLASS_LABELS.get(label, label.upper()): len(track_ids)
-                                for label, track_ids in unique_by_class.items()
-                            },
+                            "class_counts": self._class_counts(track_records),
                             "current_counts": {
                                 CLASS_LABELS.get(label, label.upper()): len(track_ids)
                                 for label, track_ids in current_by_class.items()
@@ -486,12 +489,10 @@ class VideoLabProcessor:
             if first_media_time is not None and last_media_time is not None
             else 0.0
         )
-        class_counts = {
-            CLASS_LABELS.get(label, label.upper()): len(track_ids)
-            for label, track_ids in unique_by_class.items()
-        }
+        class_counts = self._class_counts(track_records)
         track_reports = []
         for record in track_records.values():
+            record.pop("_class_label_votes", None)
             colour_votes = record.pop("_colour_votes")
             colour_total = sum(colour_votes.values())
             if colour_total:
@@ -625,6 +626,17 @@ class VideoLabProcessor:
                 }
             )
         return result
+
+    @staticmethod
+    def _class_counts(track_records: dict[int, dict]) -> dict[str, int]:
+        """Count each vehicle track once under its confidence-weighted stable class."""
+        counts: dict[str, int] = defaultdict(int)
+        for record in track_records.values():
+            if record.get("object_type") != "vehicle":
+                continue
+            label = str(record.get("class_label", "unknown"))
+            counts[label] += 1
+        return dict(counts)
 
     @staticmethod
     def _draw_frame(
