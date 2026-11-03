@@ -4,9 +4,6 @@ from queue import Empty, Full, Queue
 from threading import Lock
 from time import monotonic
 
-import cv2
-import numpy as np
-
 
 class LatestFrameBuffer:
     """Bounded live-video ingress: always keep the newest JPEG frame, never a backlog."""
@@ -53,6 +50,9 @@ class LatestFrameBuffer:
         if item is None:
             return None
         payload, arrived_at = item
+        import cv2
+        import numpy as np
+
         encoded = np.frombuffer(payload, dtype=np.uint8)
         frame = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
         if frame is None or frame.size == 0:
