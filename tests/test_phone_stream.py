@@ -87,7 +87,7 @@ def test_phone_websocket_reports_invalid_camera_id_after_upgrade(tmp_path):
 
     with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect(
-            "/api/v1/phone/stream/invalid/id",
+            "/api/v1/phone/stream/invalid.id",
             headers={"X-API-Key": "colab-test-key-with-sufficient-length"},
         ) as websocket:
             websocket.receive_json()
