@@ -179,7 +179,12 @@ class MainActivity : ComponentActivity() {
             override fun onClosed(socket: WebSocket, code: Int, reason: String) {
                 runOnUiThread {
                     sending = false
-                    status("أُغلق الاتصال: " + reason)
+                    val detail = when (code) {
+                        4400 -> "Invalid camera ID"
+                        4401 -> "API key rejected by server"
+                        else -> reason.ifBlank { "No details" }
+                    }
+                    status("Connection closed (" + code + "): " + detail)
                     unbindCamera()
                 }
             }
