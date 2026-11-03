@@ -1052,3 +1052,11 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - تم تحديث README وROADMAP وإضافة docs/COLAB_DEPLOYMENT.md.
 - تنبيه: ملفات التشغيل جاهزة في GitHub، لكن دفتر Colab لم يُشغّل في حساب المستخدم بعد؛ لا نسجل نجاح GPU/tunnel/inference قبل الاختبار الفعلي. يلزم التحقق من CI على commit المطابق قبل إعلان نجاح الاختبارات.
 - لا تتغير حدود المنتج: ANPR، السرعة المترية بعد معايرة، إدارة أسطول كاميرات، مركز العمليات النهائي، وcross-camera ReID لم تُنفذ بعد. Colab يسهّل اختبار الوظائف الموجودة ولا يكمل هذه الميزات تلقائيًا.
+
+
+### 21.14 — مراعاة حد رفع الفيديو عبر Cloudflare Quick Tunnel (2026-11-03)
+
+- بعد تجهيز دفتر Colab، تمت مراجعة حد رفع الملفات عبر Cloudflare. وثائق Cloudflare الرسمية تذكر حد جسم الطلب 100 MB في خطتي Free وPro؛ تجاوز الحد يؤدي إلى HTTP 413. المصدر: https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/
+- تم ضبط `TRAFFIC_SURVEILLANCE_MAX_UPLOAD_MB=90` في دفتر Colab افتراضيًا عند استخدام Cloudflare Quick Tunnel لتوفير هامش لترويسة multipart.
+- إذا احتاج المستخدم فيديو أكبر، يبدأ بمقطع أقصر/أقل دقة أو يختار ngrok مع مراجعة حصته وحدوده. لم يُنفذ بعد مسار استيراد فيديو من Google Drive مباشرة إلى عامل المعالجة؛ خيار Drive الحالي يحفظ النتائج وقاعدة البيانات ولا يضيف تلقائيًا آلية تجاوز حدود رفع النفق.
+- لم يتم اختبار حد الرفع عمليًا على جلسة المستخدم؛ الرقم الموثق حد الخطة العام، وقد تختلف نتائج Quick Tunnel بحسب تكوين خدمة Cloudflare. راجع المصدر قبل تغيير الإعداد.
