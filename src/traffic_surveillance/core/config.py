@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     lab_storage_dir: str = "data/lab"
     model_path: str = "yolo26n.pt"
     vehicle_model_path: str | None = None
+    enable_pretrained_vehicle_attributes: bool = False
     max_upload_mb: int = Field(default=1024, ge=10, le=4096)
 
     @model_validator(mode="after")
