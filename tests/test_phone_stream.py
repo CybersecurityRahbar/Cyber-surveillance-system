@@ -1,6 +1,6 @@
-import pytest
 import cv2
 import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
