@@ -100,6 +100,40 @@ def test_lab_processes_video_tracks_vehicle_and_writes_annotated_output(tmp_path
     assert progress_updates[-1]["progress"] == 100.0
 
 
+class RelabelledVehicleDetector:
+    def __init__(self):
+        self.index = 0
+
+    def detect_and_track(self, frame):
+        self.index += 1
+        label = "car" if self.index % 2 else "truck"
+        return [
+            Detection(
+                label=label,
+                confidence=0.9,
+                box=BoundingBox(x1=80, y1=80, x2=155, y2=170),
+                track_id=42,
+            )
+        ]
+
+
+def test_vehicle_id_is_counted_once_when_detector_class_label_changes(tmp_path):
+    source = tmp_path / "sample.mp4"
+    output = tmp_path / "processed.mp4"
+    create_test_video(source)
+
+    summary = VideoLabProcessor(RelabelledVehicleDetector()).run(
+        source,
+        output,
+        line_position=0.5,
+        max_width=960,
+    )
+
+    assert summary["unique_vehicle_tracks"] == 1
+    assert summary["class_counts"] == {"CAR": 1, "TRUCK": 1}
+    assert output.is_file()
+
+
 def test_vehicle_colour_estimator_keeps_white_and_black_pixels():
     from traffic_surveillance.domain.models import BoundingBox
     from traffic_surveillance.vision.appearance import estimate_vehicle_color
