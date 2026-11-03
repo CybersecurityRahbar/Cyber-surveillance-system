@@ -60,6 +60,7 @@ class VideoLabProcessor:
         destination = Path(output_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         is_webcam = isinstance(source, int)
+        is_phone_stream = callable(getattr(source, "read_frame", None))
         container = None
         capture = None
         writer = None
@@ -96,13 +97,17 @@ class VideoLabProcessor:
                 fps_source = float(capture.get(cv2.CAP_PROP_FPS) or 25.0)
                 if fps_source <= 0:
                     fps_source = 25.0
+            elif is_phone_stream:
+                fps_source = 15.0
             else:
                 open_options = {}
                 if isinstance(source, str) and source.lower().startswith(("rtsp://", "rtsps://")):
                     open_options = {
                         "rtsp_transport": "tcp",
                         "rw_timeout": "5000000",
-                        "max_delay": "500000",
+                        "max_delay": "100000",
+                        "fflags": "nobuffer",
+                        "flags": "low_delay",
                     }
                 container = av.open(
                     str(source),
@@ -137,6 +142,15 @@ class VideoLabProcessor:
                     if not ok:
                         break
                     media_time = monotonic() - start_clock
+                    timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
+                elif is_phone_stream:
+                    packet = source.read_frame(timeout=1.0)
+                    if packet is None:
+                        if source.closed:
+                            break
+                        continue
+                    image, arrived_at = packet
+                    media_time = max(0.0, arrived_at - start_clock)
                     timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
                 else:
                     try:
@@ -250,29 +264,30 @@ class VideoLabProcessor:
                                 record["_colour_confidence_sum"] += colour_confidence
                                 record["_colour_samples"] += 1
 
-                        if (
-                            object_type == "vehicle"
-                            and frame_index % 15 == 0
-                            and record.get("_make_model_attempts", 0) < 5
-                        ):
-                            record["_make_model_attempts"] = (
-                                record.get("_make_model_attempts", 0) + 1
-                            )
-                            classifier = getattr(self.detector, "classify_vehicle", None)
-                            prediction = (
-                                classifier(image, detection.box)
-                                if callable(classifier)
-                                else None
-                            )
-                            if prediction and prediction.get("confidence", 0.0) >= 0.45:
-                                votes = record.setdefault("_make_model_votes", {})
-                                name = str(prediction["label"])
-                                votes[name] = votes.get(name, 0.0) + float(
-                                    prediction["confidence"]
-                                )
-                                record["_make_model_samples"] = (
-                                    record.get("_make_model_samples", 0) + 1
-                                )
+                        if object_type == "vehicle" and frame_index % 15 == 0:
+                            box_width = max(1.0, detection.box.x2 - detection.box.x1)
+                            box_height = max(1.0, detection.box.y2 - detection.box.y1)
+                            crop_area = box_width * box_height
+                            if crop_area > record.get("_best_crop_area", 0.0):
+                                crop_x1 = max(0, int(detection.box.x1))
+                                crop_y1 = max(0, int(detection.box.y1))
+                                crop_x2 = min(width, int(detection.box.x2))
+                                crop_y2 = min(height, int(detection.box.y2))
+                                crop = image[crop_y1:crop_y2, crop_x1:crop_x2]
+                                if crop.size:
+                                    crop_height, crop_width = crop.shape[:2]
+                                    crop_scale = min(1.0, 320.0 / max(crop_width, crop_height))
+                                    if crop_scale < 1.0:
+                                        crop = cv2.resize(
+                                            crop,
+                                            (
+                                                max(1, round(crop_width * crop_scale)),
+                                                max(1, round(crop_height * crop_scale)),
+                                            ),
+                                            interpolation=cv2.INTER_AREA,
+                                        )
+                                    record["_best_vehicle_crop"] = crop.copy()
+                                    record["_best_crop_area"] = crop_area
 
                     current_by_class[label].add(track_id)
                     if label in VEHICLE_CLASSES:
@@ -410,6 +425,43 @@ class VideoLabProcessor:
                 "No video frames were decoded. Check the file/stream, codec and permissions."
             )
 
+        # Heavy fine-grained classification runs once per completed track, outside
+        # the frame loop, so it cannot stall the live preview cadence.
+        classify_crop = getattr(self.detector, "classify_vehicle_crop", None)
+        for record in track_records.values():
+            crop = record.pop("_best_vehicle_crop", None)
+            record.pop("_best_crop_area", None)
+            prediction = None
+            if crop is not None and callable(classify_crop):
+                try:
+                    prediction = classify_crop(crop)
+                except Exception as exc:
+                    record["attribute_model_error"] = type(exc).__name__
+            prediction = prediction or {}
+            learned_colour = prediction.get("vehicle_color_model") or {}
+            if learned_colour.get("label") and learned_colour.get("confidence", 0) >= 0.35:
+                record["vehicle_color"] = learned_colour["label"]
+                record["vehicle_color_confidence"] = round(
+                    float(learned_colour["confidence"]), 3
+                )
+                record["vehicle_color_method"] = "learned_efficientnet_b4"
+                record["vehicle_color_top3"] = learned_colour.get("top3", [])
+            make_prediction = prediction.get("make_model_model") or {}
+            custom_prediction = prediction.get("custom_make_model") or {}
+            chosen_make = custom_prediction or make_prediction
+            if chosen_make.get("label") and chosen_make.get("confidence", 0) >= 0.42:
+                record["make_model"] = str(chosen_make["label"])
+                record["make_model_confidence"] = round(
+                    float(chosen_make["confidence"]), 3
+                )
+                record["make_model_status"] = (
+                    "classified_by_custom_model"
+                    if custom_prediction
+                    else "candidate_from_stanford_cars_model"
+                )
+                record["make_model_top3"] = make_prediction.get("top3", [])
+                record["vehicle_year_estimate"] = make_prediction.get("year")
+
         elapsed = max(monotonic() - start_clock, 1e-6)
         media_duration = (
             max(0.0, last_media_time - first_media_time)
@@ -484,6 +536,13 @@ class VideoLabProcessor:
             "timestamp_qualities": sorted(timestamp_qualities),
             "speed_status": "requires_camera_calibration",
             "preview_frames_sent": preview_frames,
+            "input_frames_received": (
+                getattr(source, "received_frames", processed_frames)
+                if is_phone_stream else processed_frames
+            ),
+            "input_frames_dropped": (
+                getattr(source, "dropped_frames", 0) if is_phone_stream else 0
+            ),
             "output_width": frame_size[0] if frame_size else 0,
             "output_height": frame_size[1] if frame_size else 0,
             "stopped_by_operator": bool(stop_event and stop_event.is_set()),
