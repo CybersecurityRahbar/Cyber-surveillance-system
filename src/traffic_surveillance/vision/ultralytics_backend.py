@@ -16,6 +16,7 @@ class UltralyticsTrackingBackend:
         confidence: float = 0.25,
         device: str | None = None,
         vehicle_model_path: str | Path | None = None,
+        enable_pretrained_attributes: bool = False,
     ) -> None:
         try:
             from ultralytics import YOLO
@@ -34,6 +35,8 @@ class UltralyticsTrackingBackend:
 
         self._model = YOLO(model_source)
         self._vehicle_classifier = None
+        self._pretrained_attributes_enabled = enable_pretrained_attributes
+        self._pretrained_attributes = None
         if vehicle_model_path:
             classifier_path = Path(vehicle_model_path)
             if not classifier_path.is_file():
@@ -120,30 +123,52 @@ class UltralyticsTrackingBackend:
 
 
     def classify_vehicle(self, frame, box) -> dict | None:
-        """Run an optional user-supplied fine-grained vehicle classifier on a crop."""
+        """Compatibility wrapper for the optional user-supplied crop classifier."""
 
-        if self._vehicle_classifier is None:
-            return None
         height, width = frame.shape[:2]
         x1 = max(0, min(width - 1, int(box.x1)))
         y1 = max(0, min(height - 1, int(box.y1)))
         x2 = max(x1 + 1, min(width, int(box.x2)))
         y2 = max(y1 + 1, min(height, int(box.y2)))
         crop = frame[y1:y2, x1:x2]
-        if crop.size == 0:
-            return None
-        results = self._vehicle_classifier.predict(
-            source=crop,
-            imgsz=224,
-            device=self._device,
-            half=self._half,
-            verbose=False,
-        )
-        if not results or results[0].probs is None:
-            return None
-        probabilities = results[0].probs
-        class_id = int(probabilities.top1)
-        confidence = float(probabilities.top1conf.item())
-        names = self._vehicle_classifier.names
-        label = str(names[class_id]) if isinstance(names, dict) else str(names[class_id])
-        return {"label": label, "confidence": confidence}
+        return self.classify_vehicle_crop(crop).get("custom_make_model")
+
+    def classify_vehicle_crop(self, crop) -> dict:
+        """Run optional learned attribute models on one selected crop after video decoding."""
+
+        predictions: dict = {}
+        if crop is None or crop.size == 0:
+            return predictions
+
+        if self._vehicle_classifier is not None:
+            results = self._vehicle_classifier.predict(
+                source=crop,
+                imgsz=224,
+                device=self._device,
+                half=self._half,
+                verbose=False,
+            )
+            if results and results[0].probs is not None:
+                probabilities = results[0].probs
+                class_id = int(probabilities.top1)
+                confidence = float(probabilities.top1conf.item())
+                names = self._vehicle_classifier.names
+                label = (
+                    str(names[class_id])
+                    if isinstance(names, dict)
+                    else str(names[class_id])
+                )
+                predictions["custom_make_model"] = {
+                    "label": label,
+                    "confidence": confidence,
+                }
+
+        if self._pretrained_attributes_enabled:
+            if self._pretrained_attributes is None:
+                from traffic_surveillance.vision.vehicle_attributes import (
+                    PretrainedVehicleAttributes,
+                )
+
+                self._pretrained_attributes = PretrainedVehicleAttributes()
+            predictions.update(self._pretrained_attributes.classify(crop))
+        return predictions
