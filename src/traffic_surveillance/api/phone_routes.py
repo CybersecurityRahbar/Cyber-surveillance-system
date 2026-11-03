@@ -10,7 +10,14 @@ router = APIRouter()
 
 @router.websocket("/api/v1/phone/stream/{camera_id}")
 async def phone_camera_stream(websocket: WebSocket, camera_id: str) -> None:
-    """Accept authenticated binary JPEG frames from the companion Android camera app."""
+    """Accept authenticated binary JPEG frames from the companion Android camera app.
+
+    Accept the WebSocket handshake before reporting application-level validation
+    failures. A close sent before accept is translated by ASGI/Uvicorn into a
+    generic HTTP 403, which hides whether the camera ID or API key was rejected.
+    """
+    await websocket.accept()
+
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", camera_id):
         await websocket.close(code=4400, reason="Invalid camera ID")
         return
@@ -18,10 +25,9 @@ async def phone_camera_stream(websocket: WebSocket, camera_id: str) -> None:
     expected_key = websocket.app.state.settings.api_key or ""
     supplied_key = websocket.headers.get("x-api-key", "")
     if not expected_key or not secrets.compare_digest(expected_key, supplied_key):
-        await websocket.close(code=4401, reason="Invalid API key")
+        await websocket.close(code=4401, reason="Invalid API key or server key is not configured")
         return
 
-    await websocket.accept()
     streams = websocket.app.state.phone_streams
     previous = streams.get(camera_id)
     if previous is not None:
