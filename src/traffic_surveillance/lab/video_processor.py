@@ -81,7 +81,7 @@ class VideoLabProcessor:
 
         unique_by_class: dict[str, set[int]] = defaultdict(set)
         current_by_class: dict[str, set[int]] = defaultdict(set)
-        unique_vehicle_keys: set[tuple[str, int]] = set()
+        unique_vehicle_ids: set[tuple[str, int]] = set()
         unique_person_ids: set[int] = set()
         track_trails: dict[int, deque] = defaultdict(lambda: deque(maxlen=18))
         crossing_counts = {"down": 0, "up": 0}
@@ -98,7 +98,8 @@ class VideoLabProcessor:
                 if fps_source <= 0:
                     fps_source = 25.0
             elif is_phone_stream:
-                fps_source = 15.0
+                # The companion app sends one frame every 100 ms (10 FPS).
+                fps_source = 10.0
             else:
                 open_options = {}
                 if isinstance(source, str) and source.lower().startswith(("rtsp://", "rtsps://")):
@@ -292,7 +293,7 @@ class VideoLabProcessor:
                     current_by_class[label].add(track_id)
                     if label in VEHICLE_CLASSES:
                         unique_by_class[label].add(track_id)
-                        unique_vehicle_keys.add((label, track_id))
+                        unique_vehicle_ids.add(track_id)
                         foot = (
                             (detection.box.x1 + detection.box.x2) / 2.0,
                             detection.box.y2,
@@ -340,7 +341,7 @@ class VideoLabProcessor:
                     frame_index=frame_index,
                     fps_source=fps_source,
                     processing_fps=processed_frames / max(monotonic() - start_clock, 1e-6),
-                    unique_vehicle_tracks=len(unique_vehicle_keys),
+                    unique_vehicle_tracks=len(unique_vehicle_ids),
                     unique_person_tracks=len(unique_person_ids),
                     crossing_counts=crossing_counts,
                     show_hud=show_hud,
@@ -391,7 +392,7 @@ class VideoLabProcessor:
                                 CLASS_LABELS.get(label, label.upper()): len(track_ids)
                                 for label, track_ids in current_by_class.items()
                             },
-                            "unique_vehicle_tracks": len(unique_vehicle_keys),
+                            "unique_vehicle_tracks": len(unique_vehicle_ids),
                             "unique_person_tracks": len(unique_person_ids),
                             "line_crossings": dict(crossing_counts),
                             "input_frames_received": (
@@ -456,16 +457,28 @@ class VideoLabProcessor:
             chosen_make = custom_prediction or make_prediction
             if chosen_make.get("label") and chosen_make.get("confidence", 0) >= 0.42:
                 model_label = str(chosen_make["label"])
-                record["_make_model_votes"] = {model_label: float(chosen_make["confidence"])}
+                details = {
+                    "label": model_label,
+                    "make": chosen_make.get("make"),
+                    "model": chosen_make.get("model"),
+                    "year": chosen_make.get("year"),
+                }
+                if not details["make"] and not details["model"]:
+                    parts = model_label.replace("_", " ").replace("-", " ").split()
+                    details["make"] = parts[0] if parts else None
+                    details["model"] = " ".join(parts[1:]) if len(parts) > 1 else None
+                record["_make_model_votes"] = {
+                    model_label: float(chosen_make["confidence"])
+                }
                 record["_make_model_samples"] = 1
                 record["_make_model_attempts"] = 1
+                record["_make_model_details"] = details
                 record["_make_model_status"] = (
                     "classified_by_custom_model"
                     if custom_prediction
                     else "candidate_from_stanford_cars_model"
                 )
                 record["_make_model_top3"] = make_prediction.get("top3", [])
-                record["_pretrained_year"] = make_prediction.get("year")
 
         elapsed = max(monotonic() - start_clock, 1e-6)
         media_duration = (
@@ -508,19 +521,20 @@ class VideoLabProcessor:
                 model_label, model_score = max(
                     model_votes.items(), key=lambda item: item[1]
                 )
-                parts = model_label.replace("_", " ").replace("-", " ").split()
-                record["make"] = parts[0] if parts else None
-                record["model"] = " ".join(parts[1:]) if len(parts) > 1 else None
-                record["make_model"] = model_label
+                details = record.pop("_make_model_details", {})
+                samples = record.pop("_make_model_samples", 0)
+                record["make"] = details.get("make")
+                record["model"] = details.get("model")
+                record["make_model"] = details.get("label") or model_label
                 record["make_model_confidence"] = round(
-                    model_score / max(1, record.pop("_make_model_samples", 1)), 3
+                    model_score / max(1, samples), 3
                 )
                 record["make_model_status"] = record.pop(
                     "_make_model_status", "classified_by_configured_model"
                 )
                 record["make_model_top3"] = record.pop("_make_model_top3", [])
-                record["vehicle_year_estimate"] = record.pop("_pretrained_year", None)
-                record["make_model_samples"] = record.pop("_make_model_samples", 0)
+                record["vehicle_year_estimate"] = details.get("year")
+                record["make_model_samples"] = samples
                 record["make_model_attempts"] = record.pop("_make_model_attempts", 0)
             else:
                 record["make"] = None
@@ -548,7 +562,7 @@ class VideoLabProcessor:
             "processing_fps": round(processed_frames / elapsed, 2),
             "processing_seconds": round(elapsed, 2),
             "media_duration_seconds": round(media_duration, 2),
-            "unique_vehicle_tracks": len(unique_vehicle_keys),
+            "unique_vehicle_tracks": len(unique_vehicle_ids),
             "unique_person_tracks": len(unique_person_ids),
             "class_counts": class_counts,
             "line_crossings": dict(crossing_counts),
@@ -568,7 +582,31 @@ class VideoLabProcessor:
             "session_started_at": started_at.isoformat(),
             "tracks": track_reports,
             "track_reports_count": len(track_reports),
-            "vehicle_attribute_status": "estimated_colour_only_make_model_not_configured",
+            "vehicle_attribute_status": (
+                "learned_attributes_available"
+                if any(
+                    item.get("vehicle_color_method") == "learned_efficientnet_b4"
+                    or item.get("make_model_status") in {
+                        "classified_by_custom_model",
+                        "candidate_from_stanford_cars_model",
+                    }
+                    for item in track_reports
+                )
+                else "heuristic_colour_only_no_confident_make_model"
+            ),
+            "vehicle_attribute_counts": {
+                "learned_colour_tracks": sum(
+                    item.get("vehicle_color_method") == "learned_efficientnet_b4"
+                    for item in track_reports
+                ),
+                "make_model_tracks": sum(
+                    item.get("make_model_status") in {
+                        "classified_by_custom_model",
+                        "candidate_from_stanford_cars_model",
+                    }
+                    for item in track_reports
+                ),
+            },
         }
         if on_progress is not None:
             on_progress(
@@ -580,7 +618,7 @@ class VideoLabProcessor:
                     "source_fps": result["source_fps"],
                     "class_counts": class_counts,
                     "current_counts": {},
-                    "unique_vehicle_tracks": len(unique_vehicle_keys),
+                    "unique_vehicle_tracks": len(unique_vehicle_ids),
                     "unique_person_tracks": len(unique_person_ids),
                     "line_crossings": dict(crossing_counts),
                     "current_tracks": [],
