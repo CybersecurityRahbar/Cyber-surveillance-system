@@ -5,6 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from traffic_surveillance.api.lab_routes import router as lab_router
+from traffic_surveillance.api.phone_routes import router as phone_router
 from traffic_surveillance.api.routes import router
 from traffic_surveillance.core.config import Settings, get_settings
 from traffic_surveillance.lab.jobs import LabJobManager
@@ -24,8 +25,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.state.settings = config
     application.state.event_store = SQLiteEventStore(config.database)
     application.state.lab_jobs = LabJobManager()
+    application.state.phone_streams = {}
     application.include_router(router)
     application.include_router(lab_router)
+    application.include_router(phone_router)
 
     web_dir = Path(__file__).resolve().parents[1] / "web"
     application.mount(
