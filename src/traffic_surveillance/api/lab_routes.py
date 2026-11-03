@@ -265,6 +265,11 @@ async def capabilities(request: Request) -> dict:
         "pretrained_vehicle_attributes_enabled": (
             settings.enable_pretrained_vehicle_attributes
         ),
+        "learned_vehicle_models": {
+            "colour": "piotreksl/vehicle-color-recognition",
+            "make_model": "twincar-group2/twincar-classifier",
+            "loaded_after_primary_video_pass": True,
+        },
     }
 
 
