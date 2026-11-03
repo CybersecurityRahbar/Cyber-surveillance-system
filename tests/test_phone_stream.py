@@ -1,6 +1,11 @@
+import pytest
 import cv2
 import numpy as np
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
+from traffic_surveillance.api.app import create_app
+from traffic_surveillance.core.config import Settings
 from traffic_surveillance.lab.phone_stream import LatestFrameBuffer
 
 
@@ -33,7 +38,58 @@ def test_latest_frame_buffer_drops_stale_frames_and_keeps_latest():
 def test_latest_frame_buffer_rejects_bad_or_oversized_payloads():
     source = LatestFrameBuffer(max_jpeg_bytes=128)
     assert not source.push_jpeg(b"not a jpeg")
-    assert not source.push_jpeg(b"\xff\xd8" + b"x" * 200 + b"\xff\xd9")
+    assert not source.push_jpeg(b"\\xff\\xd8" + b"x" * 200 + b"\\xff\\xd9")
     assert source.received_frames == 0
     assert source.dropped_frames == 0
     source.close()
+
+
+def _phone_client(tmp_path):
+    app = create_app(
+        Settings(
+            environment="test",
+            api_key="colab-test-key-with-sufficient-length",
+            database=str(tmp_path / "events.sqlite3"),
+            lab_storage_dir=str(tmp_path / "lab"),
+        )
+    )
+    return TestClient(app)
+
+
+def test_phone_websocket_accepts_matching_api_key(tmp_path):
+    client = _phone_client(tmp_path)
+
+    with client.websocket_connect(
+        "/api/v1/phone/stream/road-01",
+        headers={"X-API-Key": "colab-test-key-with-sufficient-length"},
+    ) as websocket:
+        message = websocket.receive_json()
+        assert message["status"] == "connected"
+        assert message["camera_id"] == "road-01"
+        assert message["transport"] == "websocket-jpeg"
+
+
+def test_phone_websocket_reports_bad_api_key_as_close_code_not_http_403(tmp_path):
+    client = _phone_client(tmp_path)
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            "/api/v1/phone/stream/road-01",
+            headers={"X-API-Key": "incorrect-test-key-with-sufficient-length"},
+        ) as websocket:
+            websocket.receive_json()
+
+    assert exc_info.value.code == 4401
+
+
+def test_phone_websocket_reports_invalid_camera_id_after_upgrade(tmp_path):
+    client = _phone_client(tmp_path)
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            "/api/v1/phone/stream/invalid/id",
+            headers={"X-API-Key": "colab-test-key-with-sufficient-length"},
+        ) as websocket:
+            websocket.receive_json()
+
+    assert exc_info.value.code == 4400
