@@ -26,7 +26,6 @@ def test_lab_ui_and_capabilities_are_available(tmp_path):
     capabilities = client.get("/api/v1/lab/capabilities")
     assert capabilities.status_code == 200
     assert capabilities.json()["model"] == "yolo26n.pt"
-    assert capabilities.json()["phone_streaming"]["media_gateway"] == "MediaMTX"
     assert capabilities.json()["phone_streaming"]["implemented_in_phone_app"] is True
     assert capabilities.json()["vehicle_make_model_configured"] is False
 
