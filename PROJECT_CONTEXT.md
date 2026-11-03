@@ -1060,3 +1060,21 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - تم ضبط `TRAFFIC_SURVEILLANCE_MAX_UPLOAD_MB=90` في دفتر Colab افتراضيًا عند استخدام Cloudflare Quick Tunnel لتوفير هامش لترويسة multipart.
 - إذا احتاج المستخدم فيديو أكبر، يبدأ بمقطع أقصر/أقل دقة أو يختار ngrok مع مراجعة حصته وحدوده. لم يُنفذ بعد مسار استيراد فيديو من Google Drive مباشرة إلى عامل المعالجة؛ خيار Drive الحالي يحفظ النتائج وقاعدة البيانات ولا يضيف تلقائيًا آلية تجاوز حدود رفع النفق.
 - لم يتم اختبار حد الرفع عمليًا على جلسة المستخدم؛ الرقم الموثق حد الخطة العام، وقد تختلف نتائج Quick Tunnel بحسب تكوين خدمة Cloudflare. راجع المصدر قبل تغيير الإعداد.
+
+
+### 21.15 — نتيجة CI لتهيئة Colab والـTunnel (2026-11-03)
+
+- الالتزام المختبر: `1ea1e82732033c2cbee062bd4f58cd54c548f36c` على main.
+- GitHub Actions Run ID: `41670601605`
+- الحالة النهائية: completed / success.
+- Ruff: `All checks passed!`
+- Pytest: `12 passed, 1 warning in 1.67s`.
+- الاختبار الجديد `test_api_key_protects_lab_api_but_keeps_ui_reachable` اجتاز، ويثبت أن HTML/assets تبقى قابلة للوصول بينما API محمية بالمفتاح.
+- خطوة تثبيت dependencies نجحت. CI ثبّت PyAV 19.0.2 وOpenCV 4.14.0.94 ضمن نطاقات الاعتماديات.
+- رابط التشغيل: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41670601605
+- التحذيرات:
+  - StarletteDeprecationWarning: استخدام httpx مع TestClient أصبح deprecated؛ الاختبارات لم تفشل. لا نغير إصدار العميل إلا بعد تقييم التوافق.
+  - GitHub Actions أظهر تحذير Node.js 20 deprecation لإجراءات checkout@v4 وsetup-python@v5 التي يجري فرض Node.js 24 عليها؛ لم يمنع التشغيل.
+- التحقق من الملف: notebook JSON قابل للتحليل، ويتكون من 19 خلية؛ دفتر Colab، docs/COLAB_DEPLOYMENT.md، README، وPROJECT_CONTEXT.md موجودة على main.
+- لم يتم اختبار Google Colab أو Cloudflare/ngrok من حساب المستخدم بعد. لا نسجل نجاح رابط عام أو GPU inference حتى يتم تشغيل الدفتر وتأكيد الواجهة والرفع والمعالجة.
+- الإعداد الافتراضي لرفع ملفات Colab عبر Cloudflare Quick Tunnel هو 90 MB (أقل من حد Cloudflare Free/Pro البالغ 100 MB وفق الوثائق) لتجنب 413؛ استخدم مقاطع قصيرة أو ngrok/طريقة أخرى للملفات الكبيرة.
