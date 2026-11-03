@@ -286,9 +286,17 @@
   }
 
   $("apiKey").value = sessionStorage.getItem("trafficLabApiKey") || "";
-  $("apiKey").addEventListener("change", () =>
-    sessionStorage.setItem("trafficLabApiKey", $("apiKey").value.trim())
-  );
+  $("apiKey").addEventListener("change", () => {
+    const key = $("apiKey").value.trim();
+    if (key) {
+      sessionStorage.setItem("trafficLabApiKey", key);
+      loadCapabilities();
+    } else {
+      sessionStorage.removeItem("trafficLabApiKey");
+      $("backendStatus").textContent = "بانتظار مفتاح API";
+      setNotice("أدخل مفتاح API المخصص لهذه الجلسة للوصول إلى واجهات التحليل.");
+    }
+  });
   document.querySelectorAll(".mode").forEach((button) =>
     button.addEventListener("click", () => setMode(button.dataset.mode))
   );

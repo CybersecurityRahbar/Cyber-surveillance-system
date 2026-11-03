@@ -40,3 +40,26 @@ def test_live_source_validation_rejects_non_stream_urls(tmp_path):
         json={"source": "https://example.com/video.mp4"},
     )
     assert response.status_code == 422
+
+
+
+def test_api_key_protects_lab_api_but_keeps_ui_reachable(tmp_path):
+    app = create_app(
+        Settings(
+            environment="test",
+            api_key="colab-test-key-with-sufficient-length",
+            database=str(tmp_path / "events.sqlite3"),
+            lab_storage_dir=str(tmp_path / "lab"),
+        )
+    )
+    client = TestClient(app)
+
+    assert client.get("/lab").status_code == 200
+    assert client.get("/lab-assets/lab.js").status_code == 200
+    assert client.get("/api/v1/lab/capabilities").status_code == 401
+
+    authorized = client.get(
+        "/api/v1/lab/capabilities",
+        headers={"X-API-Key": "colab-test-key-with-sufficient-length"},
+    )
+    assert authorized.status_code == 200
