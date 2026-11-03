@@ -259,7 +259,11 @@ class VideoLabProcessor:
                                 record.get("_make_model_attempts", 0) + 1
                             )
                             classifier = getattr(self.detector, "classify_vehicle", None)
-                            prediction = classifier(image, detection.box) if callable(classifier) else None
+                            prediction = (
+                                classifier(image, detection.box)
+                                if callable(classifier)
+                                else None
+                            )
                             if prediction and prediction.get("confidence", 0.0) >= 0.45:
                                 votes = record.setdefault("_make_model_votes", {})
                                 name = str(prediction["label"])
