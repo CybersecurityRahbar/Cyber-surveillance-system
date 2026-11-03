@@ -85,7 +85,7 @@ def test_mjpeg_preview_stream_and_lab_report_routes(tmp_path):
         filename="sample.mp4",
         options={},
     )
-    jpeg = b"\\xff\\xd8test-jpeg\\xff\\xd9"
+    jpeg = bytes([255, 216]) + b"test-jpeg" + bytes([255, 217])
     manager.set_preview(job_id, jpeg)
     manager.update(job_id, status="completed")
 
