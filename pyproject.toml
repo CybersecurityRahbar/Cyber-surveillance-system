@@ -22,7 +22,10 @@ video = [
   "av>=16,<20",
 ]
 vision = [
-  "ultralytics>=8.4.63,<9",
+  "ultralytics>=8.4.197,<9",
+  "timm>=1.0.20,<2",
+  "huggingface_hub>=0.35,<2",
+  "Pillow>=10,<13",
 ]
 test-video = [
   "opencv-python>=4.10,<5",
