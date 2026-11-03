@@ -273,3 +273,14 @@ Ultralytics تنص على أن الشيفرة والأوزان تقع افترا
 - OpenCV video I/O properties: https://docs.opencv.org/4.12.0/d4/d15/group__videoio__flags__base.html
 - Milestone XProtect 2026r1 views and video wall: https://doc.milestonesys.com/xprotect/xprotect-smart-client/2026r1/en/content-in-view-items
 - PaddleOCR PP-OCRv6: https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv6/PP-OCRv6.en.md
+
+
+## 9. التعرف على لون المركبة والماركة/الطراز
+
+- كشف YOLO العام يصنف فئة المركبة ولا يتعرف وحده على الماركة أو الطراز.
+- أضيف تقدير لون HSV مبسط من منطقة داخل صندوق المركبة مع تجميع عينات عبر عدة إطارات. هذا تقدير heuristic حساس للإضاءة والانعكاس والخلفية، ويُحفظ معه confidence وعدد العينات. ليس بديلاً عن مصنف ألوان مدرب.
+- يمكن ربط مصنف سيارات fine-grained منفصل من نوع Ultralytics `classify` عبر `TRAFFIC_SURVEILLANCE_VEHICLE_MODEL_PATH`. يجب أن تكون الفئات التي دُرب عليها النموذج واضحة، وأن تكون البيانات والأوزان مرخصة للغرض المقصود. لا تتضمن الشيفرة أوزاناً جاهزة لتحديد Toyota Hilux أو Hyundai Tucson أو Mercedes G-Class.
+- CompCars يضم تصنيفات make/model كثيرة لكنه للاستخدام البحثي غير التجاري وفق ترخيصه/شروطه: https://mmlab.ie.cuhk.edu.hk/datasets/comp_cars/
+- DeepCar 5.0 مجموعة بحثية أيضاً: https://github.com/DeepCar/Deepcar5.0
+- يمكن استخدام نموذج تقدير اللون المفتوح MIT المتاح هنا كبديل لاحق للـHSV: https://huggingface.co/piotreksl/vehicle-color-recognition
+- قبل اعتماد مصنف make/model، يجب تقييم top-1/top-5 accuracy حسب زاوية الكاميرا، حجم المركبة، الطقس، والبلد/السوق. لا نعتبر التنبؤ صحيحاً لمجرد ظهور اسم طراز.

@@ -31,7 +31,7 @@
 ## Cloudflare Quick Tunnel
 
 - لا يحتاج حسابًا أو نطاقًا.
-- ينشئ رابطًا عشوائيًا مؤقتًا `*.trycloudflare.com`.
+- ينشئ رابطًا عشوائيًا مؤقتًا `*.trycloudflare.com`؛ تتولى الخلية الأخيرة مراقبة عملية النفق وتبقى نشطة بينما يعمل.
 - يتوقف الرابط عند إيقاف cloudflared أو انتهاء Runtime.
 - Quick Tunnels للاختبار والتطوير، وليست نشرًا دائمًا.
 - الصفحة وملفاتها الثابتة متاحة لمن يعرف الرابط؛ مسارات `/api/v1` محمية بمفتاح API.
@@ -56,7 +56,7 @@
 
 ## حفظ البيانات
 
-الافتراضي `/content/cyber-surveillance-data` مؤقت. يمكن تفعيل Google Drive cell لحفظ SQLite والملفات الناتجة. أوزان YOLO تُخزن في cache runtime وقد يلزم تنزيلها عند إعادة إنشاء الجلسة.
+الافتراضي `/content/cyber-surveillance-data` مؤقت. يمكن تفعيل Google Drive cell لحفظ SQLite والملفات الناتجة. يحفظ SQLite الآن سجلات الجلسة وهويات Track ومساراتها وسماتها. أوزان YOLO تُخزن في cache runtime وقد يلزم تنزيلها عند إعادة إنشاء الجلسة.
 
 ## حدود Colab
 
@@ -64,6 +64,9 @@
 - توفر GPU والحدود ومدة الجلسة تتغير؛ FAQ يذكر أن المجاني قد يصل إلى 12 ساعة كحد أقصى وفق التوفر والاستخدام، وليس ضمانًا لمدة ثابتة.
 - النفق والرابط يتوقفان عند انقطاع Runtime.
 - حد Cloudflare الموثق لحجم جسم الطلب في خطتي Free وPro هو 100 MB. يضبط الدفتر حد التطبيق على 90 MB لتجنب وصول الطلب إلى الحد الأقصى بسبب multipart overhead. استخدم مقطعًا قصيرًا أو جرّب ngrok عند الحاجة إلى رفع أكبر، مع مراعاة حدود نقل البيانات والمهلة في حسابك. المصدر: https://developers.cloudflare.com/support/troubleshooting/http-status-codes/4xx-client-error/error-413/
+- تقدير اللون الحالي heuristic عبر HSV وليس مصنف ألوان مدرباً؛ سجّل النتيجة مع confidence ولا تعاملها كتأكيد نهائي.
+- لا توجد أوزان ماركة/طراز مضمنة. يمكن تمرير مسار مصنف Ultralytics classification عبر `TRAFFIC_SURVEILLANCE_VEHICLE_MODEL_PATH` في خلية Colab؛ يجب أن تكون labels المدربة واضحة مثل `Toyota_Hilux` أو `Hyundai_Tucson`. التوصيل البرمجي اختياري ولم يُختبر بوزن مخصص بعد.
+- الخلية النشطة لا تتجاوز الحد الأقصى لجلسة Colab أو سحب الموارد؛ إنها تمنع فقط انتهاء خلية بدء الخدمة بعد تنفيذ أمر background.
 - لا تستخدمه للمراقبة الإنتاجية 24/7.
 
 مصادر Google:
@@ -80,7 +83,10 @@
 - [ ] no API key is rejected
 - [ ] valid API key unlocks capabilities
 - [ ] video upload creates job
-- [ ] annotated preview appears
+- [ ] continuous MJPEG preview appears and updates smoothly
+- [ ] separate active-object list updates
+- [ ] per-track reports persist in SQLite
+- [ ] JSON report export works
 - [ ] detections, Track IDs and counts update
 - [ ] output MP4 plays/downloads
 - [ ] persistence verified when Drive mode enabled

@@ -1078,3 +1078,50 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - التحقق من الملف: notebook JSON قابل للتحليل، ويتكون من 19 خلية؛ دفتر Colab، docs/COLAB_DEPLOYMENT.md، README، وPROJECT_CONTEXT.md موجودة على main.
 - لم يتم اختبار Google Colab أو Cloudflare/ngrok من حساب المستخدم بعد. لا نسجل نجاح رابط عام أو GPU inference حتى يتم تشغيل الدفتر وتأكيد الواجهة والرفع والمعالجة.
 - الإعداد الافتراضي لرفع ملفات Colab عبر Cloudflare Quick Tunnel هو 90 MB (أقل من حد Cloudflare Free/Pro البالغ 100 MB وفق الوثائق) لتجنب 413؛ استخدم مقاطع قصيرة أو ngrok/طريقة أخرى للملفات الكبيرة.
+
+
+### 21.17 — استكمال تحسينات واجهة المختبر وتقارير Track وتعديلات Colab (2026-11-03)
+
+- جمع المستخدم ملاحظات تشغيلية تفصيلية بعد تجربة النظام:
+  1. الواجهة السابقة بدائية وغير متطورة.
+  2. خلية Colab الأخيرة يجب أن تظل Running بينما الخدمة تعمل.
+  3. المعاينة الحية كانت تتحدث ببطء/تقطع رغم أن MP4 الناتج سلس.
+  4. HUD أسود شفاف واسع يحجب المشهد؛ يريد إخفاءه أو جعله اختيارياً وصغيراً.
+  5. ID badges كبيرة وتغطي المركبات؛ يريد شارة صغيرة فوق الجسم.
+  6. يريد تمييز الأشخاص بالأزرق والسيارات بالأخضر.
+  7. يريد قاعدة بيانات وتقارير لكل Track مع العدّ والتصنيفات والسمات، بما في ذلك لون السيارة وطرازها.
+- تمت إعادة تصميم `lab.html/lab.css/lab.js` كلوحة عمليات RTL داكنة ومتجاوبة:
+  - مؤشرات مركبات/أشخاص/عبور/FPS في أعلى الصفحة.
+  - مصدر ملف/بث، إعدادات خوارزمية التتبع والثقة وخط العد والدقة.
+  - شاشة رادار أكبر، قائمة منفصلة للأجسام النشطة خارج الفيديو، ملخص سمات، جدول per-track وتصدير JSON.
+  - مفتاح HUD داخل الفيديو مغلق افتراضياً.
+  - شخص أزرق ومركبة خضراء، وشارة Track صغيرة.
+- تشخيص تقطيع المعاينة: الواجهة السابقة كانت تستقصي صورة JPEG كل 750ms (نحو 1.33 تحديث/ثانية)؛ لذلك كانت المعاينة محدودة حتى لو كان التحليل أسرع. أضيف مسار `multipart/x-mixed-replace` للـMJPEG، يتصل به المتصفح عبر fetch مع X-API-Key ويحلل Content-Length. المعاينة الآن محددة بحد أعلى يقارب 12 FPS لتقليل ضغط JPEG والنفق؛ MP4 النهائي يحافظ على معدل المصدر. لا يوجد benchmark Colab أو كاميرا حقيقية حتى الآن.
+- تحسينات YOLO: اختيار device=CUDA تلقائياً عند توفره، FP16 عند GPU، imgsz=640، max_det=100. هذه إعدادات بدء وليست برهان أداء ميداني.
+- تغيير معالجة preview: أول إطار يُرسل فوراً، وبعدها لا يتجاوز معدل الترميز 12fps. يجب قياس FPS/latency على Colab قبل تغيير المعدل.
+- تقارير SQLite:
+  - `lab_sessions`: مصدر الجلسة وحالتها والتواريخ وملخص JSON.
+  - `lab_tracks`: كل track_id مع نوع الجسم والصنف وأول/آخر ظهور وعدد الإطارات والثقة وصناديق البداية/النهاية ونقاط مسار محدودة وعبور خط العد وسمات المركبة.
+  - واجهات التقارير `/api/v1/lab/reports`, `/reports/{session_id}`, `/reports/{session_id}/tracks`.
+  - تصدير JSON من الواجهة.
+- أضيف تقدير لون تقريبي عبر HSV من ROI داخل صندوق المركبة، يجمع عينات عبر frames ويعرض اللون وconfidence. تم إصلاح شرط استبعاد البكسلات البيضاء/الساطعة بإدخال الظلال والإضاءات ضمن العينة، وأضيف test للأبيض والأسود.
+- الماركة والطراز:
+  - لا يستطيع YOLO26n COCO العام التعرف على Hilux/Tucson/G-Class.
+  - أضيف hook اختياري لمصنف Ultralytics classification محلي يمرر مساره عبر `TRAFFIC_SURVEILLANCE_VEHICLE_MODEL_PATH`، وتُجمع حتى خمس محاولات/تنبؤات مؤهلة لكل Track.
+  - لا توجد أوزان مرفقة أو dataset مدرب داخل GitHub؛ يجب على المستخدم توفير classifier ملائم ومدروس الترخيص. لا تعرض الواجهة اسم موديل كحقيقة إن لم يوجد model weights.
+  - مرجع اللون المفتوح MIT: https://huggingface.co/piotreksl/vehicle-color-recognition
+  - CompCars (بحثي/غير تجاري): https://mmlab.ie.cuhk.edu.hk/datasets/comp_cars/
+  - DeepCar 5.0 (بحثي): https://github.com/DeepCar/Deepcar5.0
+- دفتر Colab:
+  - أعيد تنظيمه بحيث لا يبدأ خادم Uvicorn في خلية منفصلة.
+  - الخلية الأخيرة تشغّل Uvicorn + Cloudflare Quick Tunnel أو ngrok وتظل Running، وتتحقق من /healthz وبقاء tunnel كل 20 ثانية، وتستجيب لـKeyboardInterrupt بإنهاء العمليات.
+  - تم تصحيح regex رابط Cloudflare إلى النمط الذي يطابق نقاط النطاق بشكل حرفي.
+  - أضيف خيار `VEHICLE_CLASSIFIER_PATH` لربط أوزان مصنف مخصصة من Drive أو مساحة Runtime عبر متغير البيئة `TRAFFIC_SURVEILLANCE_VEHICLE_MODEL_PATH`.
+  - تبقى حدود Colab الصلبة قائمة؛ الخلية النشطة لا تضمن جلسة غير محدودة.
+- أضيف/حدّث اختبارات:
+  - person+vehicle records and summary track details.
+  - white/black colour estimator.
+  - MJPEG stream endpoint and report routes.
+  - SQLite persistence after store reopen.
+  - Node.js syntax and notebook JSON validation in GitHub CI.
+- يجب فحص CI على الالتزام الحالي قبل إعلان نجاح الاختبارات. دفتر Colab لم يُشغّل من حساب المستخدم بعد، ومصنف الماركة/الطراز لم يُختبر مع أوزان مخصصة.

@@ -30,7 +30,10 @@
 - unique track counts وvirtual line crossing counts.
 - processed preview أثناء المعالجة وMP4 output.
 - اختبار فيديو synthetic في CI وFake detector دون أوزان حقيقية أو كاميرا فعلية.
-- الخطوة التالية: تجربة المستخدم على فيديو مرور واقعي ثم benchmark CPU/GPU/الذاكرة.
+- تحديث 3 نوفمبر: واجهة مختبر جديدة، MJPEG preview، track inspector، وتصدير تقارير JSON.
+- تحديث 3 نوفمبر: SQLite per-session/per-track reports وHSV vehicle colour estimate وoptional make/model classifier hook.
+- تحديث 3 نوفمبر: Colab final supervisor cell remains running while it monitors Uvicorn/tunnel.
+- الخطوة التالية: تجربة المستخدم على فيديو مرور واقعي ثم benchmark CPU/GPU/الذاكرة والـpreview latency.
 
 
 ## المرحلة 2.1 — بيئة اختبار Google Colab
@@ -42,6 +45,16 @@
 - الخطوة التالية: تشغيل notebook على Colab، رفع فيديو مرور حقيقي، وتسجيل FPS والذاكرة وجودة الكشف والتتبع.
 - حد القبول: فتح الصفحة العامة، التحقق من API key، رفع الفيديو، ظهور preview، توليد MP4، واسترجاع ملخص العدّ.
 
+
+## المرحلة 2.2 — تحسينات المختبر والتحقق من التقارير
+**الحالة: التنفيذ البرمجي موجود؛ تحقق الفيديو الواقعي ينتظر تشغيل Colab**
+- Modern RTL operations UI، active-object list خارج الفيديو، compact labels، vehicle/person colour separation.
+- MJPEG preview بمعدل محدد لتقليل ضغط الواجهة.
+- Session/track persistence في SQLite مع JSON report.
+- Approximate paint-colour estimation.
+- Optional fine-grained vehicle classifier hook; no default weights included.
+- CI tests for track reports, SQLite persistence, API key, MJPEG multipart, HTML assets and notebook/JS syntax.
+- القبول الميداني: اختبار مقاطع نهارية/ليلية متعددة الدقات، قياس preview latency وprocessing FPS، مقارنة عدّ Track يدوي، ومراجعة جودة اللون.
 
 ## المرحلة 3 — Calibration Studio and Traffic Analytics
 - واجهة معايرة camera-specific.
