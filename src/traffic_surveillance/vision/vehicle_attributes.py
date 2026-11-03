@@ -45,6 +45,7 @@ class PretrainedVehicleAttributes:
 
         self._make_model_model = None
         self._make_model_labels: list[str] = []
+        self._make_model_classes: list[dict[str, Any]] = []
         self._make_transform = None
         try:
             mapping_path = (
@@ -72,6 +73,7 @@ class PretrainedVehicleAttributes:
                 is_training=False,
             )
             self._make_model_labels = labels
+            self._make_model_classes = classes
         except Exception:
             # Colour classification remains useful if the optional make/model
             # checkpoint or its label mapping cannot be resolved.
@@ -127,7 +129,12 @@ class PretrainedVehicleAttributes:
             if 0 <= make_index < len(self._make_model_labels)
             else None
         )
-        accepted_make = make_label if make_confidence >= 0.42 else None
+        accepted_make = make_label if make_confidence >= 0.60 else None
+        class_metadata = (
+            self._make_model_classes[make_index]
+            if 0 <= make_index < len(self._make_model_classes)
+            else {}
+        )
         year_match = re.search(r"\b(19\d{2}|20\d{2}|202[0-9])\b", make_label or "")
         return {
             "vehicle_color_model": {
@@ -144,7 +151,12 @@ class PretrainedVehicleAttributes:
                 "label": accepted_make,
                 "candidate_label": make_label,
                 "confidence": round(make_confidence, 4),
-                "year": year_match.group(1) if year_match else None,
+                "make": class_metadata.get("make") if accepted_make else None,
+                "model": class_metadata.get("model") if accepted_make else None,
+                "year": (
+                    class_metadata.get("year")
+                    if accepted_make else (year_match.group(1) if year_match else None)
+                ),
                 "top3": [
                     {
                         "label": self._make_model_labels[index],
