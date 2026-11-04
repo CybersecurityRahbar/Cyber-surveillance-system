@@ -4,6 +4,7 @@
     mode: "file",
     jobId: null,
     timer: null,
+    eventTimer: null,
     previewController: null,
     previewUrl: null,
     videoUrl: null,
@@ -57,6 +58,9 @@
     $("liveMode").hidden = mode !== "live";
     $("startFile").hidden = mode !== "file";
     $("startLive").hidden = mode !== "live";
+    if (mode === "live" && $("tracker").value === "models/trackers/cyber_tracktrack_reid.yaml") {
+      $("tracker").value = "bytetrack.yaml";
+    }
   }
 
   function stopPreviewStream() {
@@ -68,7 +72,9 @@
 
   function resetResult() {
     if (state.timer) clearInterval(state.timer);
+    if (state.eventTimer) clearInterval(state.eventTimer);
     state.timer = null;
+    state.eventTimer = null;
     stopPreviewStream();
     state.jobId = null;
     $("processedPreview").hidden = true;
@@ -112,9 +118,18 @@
     $("metricRealtime").textContent = job
       ? realtimeFactor.toFixed(2) + "× زمن المصدر"
       : "— × زمن المصدر";
+    $("metricLatency").textContent = job
+      ? Number(job.inference_latency_ms || job.result?.inference_latency_ms || 0).toFixed(0) + " ms"
+      : "— ms";
+    $("metricFrameAge").textContent = job
+      ? Number(job.frame_age_ms || 0).toFixed(0) + " ms"
+      : "— ms";
+    $("metricReceived").textContent = String(
+      job?.input_frames_received ?? job?.result?.input_frames_received ?? 0
+    ) + " مستلم";
     $("metricDropped").textContent = String(
       job?.input_frames_dropped ?? job?.result?.input_frames_dropped ?? 0
-    ) + " إطار ساقط";
+    ) + " ساقط";
     $("metricDuration").textContent = job?.result
       ? job.result.media_duration_seconds.toFixed(1) + " sec"
       : "—";
@@ -142,7 +157,10 @@
   function renderLiveTracks(items) {
     const list = $("liveTrackList");
     list.innerHTML = "";
-    const filtered = (items || []).filter((item) => item.object_type !== "other").slice(0, 12);
+    const filtered = [...(items || [])]
+      .filter((item) => item.object_type !== "other")
+      .sort((a, b) => Number(b.last_seen_seconds || 0) - Number(a.last_seen_seconds || 0))
+      .slice(0, 20);
     if (!filtered.length) {
       list.innerHTML = '<div class="empty-state">لا توجد هويات نشطة في الإطار الحالي</div>';
       return;
@@ -158,7 +176,9 @@
       const name = document.createElement("b");
       name.textContent = item.object_type === "person" ? "شخص" : (item.class_label || "مركبة");
       const meta = document.createElement("small");
-      meta.textContent = "هوية التتبع · " + item.track_id;
+      const seen = Number(item.frames_seen || 0);
+      meta.textContent = "آخر رصد · " + seen + " إطار · " +
+        Number(item.duration_seconds || 0).toFixed(1) + " ث";
       info.append(name, meta);
       const confidence = document.createElement("div");
       confidence.className = "track-confidence";
@@ -183,7 +203,10 @@
       body.innerHTML = '<tr><td colspan="8" class="table-empty">لم يتم رصد هويات قابلة للحفظ في هذه الجلسة.</td></tr>';
       return;
     }
-    for (const track of tracks) {
+    const ordered = [...tracks].sort((a, b) =>
+      Number(b.last_seen_seconds || 0) - Number(a.last_seen_seconds || 0)
+    );
+    for (const track of ordered) {
       const row = document.createElement("tr");
       row.appendChild(makeCell("#" + track.track_id, "track-id"));
 
@@ -257,7 +280,7 @@
     try {
       const payload = {
         source,
-        duration_seconds: Number($("liveDuration").value),
+        duration_seconds: Number($("liveDuration").value) || 0,
         tracker: $("tracker").value,
         confidence: Number($("confidence").value) / 100,
         line_position: Number($("linePosition").value) / 100,
@@ -302,8 +325,10 @@
     $("startFile").disabled = true;
     $("startLive").disabled = true;
     startPreviewStream(jobId);
-    state.timer = setInterval(() => pollJob(jobId), 850);
+    state.timer = setInterval(() => pollJob(jobId), 350);
+    state.eventTimer = setInterval(loadEvents, 2500);
     pollJob(jobId);
+    loadEvents();
   }
 
   function concatBytes(a, b) {
@@ -387,18 +412,29 @@
         $("monitorBadge").innerHTML = job.status === "failed"
           ? "<i></i> فشلت المعالجة"
           : "<i></i> اكتملت الجلسة";
+        if (state.eventTimer) clearInterval(state.eventTimer);
+        state.eventTimer = null;
         if (job.status === "completed" || job.status === "stopped") {
           $("sourcePlayback").pause();
           $("sourcePlayback").hidden = true;
-          $("processedPreview").hidden = true;
           $("analysisModeNote").hidden = true;
           $("toggleAnalysisView").hidden = true;
-          await loadOutput(jobId);
+          if (job.result?.output_video_available) {
+            $("processedPreview").hidden = true;
+            await loadOutput(jobId);
+          } else {
+            $("resultVideoWrap").hidden = true;
+            $("processedPreview").hidden = false;
+            $("jobState").textContent = "انتهت جلسة الرصد الحي؛ آخر إطار وبيانات التتبع محفوظة.";
+          }
           await loadTrackReports(jobId);
           await loadSavedReports();
-          $("jobState").textContent = job.status === "stopped"
-            ? "تم إيقاف الجلسة يدوياً"
-            : "اكتملت المعالجة بنجاح";
+          await loadEvents();
+          if (job.result?.output_video_available) {
+            $("jobState").textContent = job.status === "stopped"
+              ? "تم إيقاف الجلسة يدوياً"
+              : "اكتملت المعالجة بنجاح";
+          }
         } else {
           setNotice(job.error || "حدث خطأ أثناء تحليل الفيديو.");
           $("jobState").textContent = "فشلت المعالجة";
@@ -425,7 +461,22 @@
       : job.status === "queued"
         ? "في قائمة الانتظار..."
         : job.status;
-    renderLiveTracks(job.current_tracks || []);
+    const currentTracks = job.current_tracks || [];
+    renderLiveTracks(currentTracks);
+    renderTrackReport(currentTracks);
+    if (state.jobId) {
+      $("reportSession").textContent = "LIVE · SESSION " + state.jobId.slice(0, 8).toUpperCase();
+    }
+    $("metricLatency").textContent = Number(job.inference_latency_ms || 0).toFixed(0) + " ms";
+    $("metricFrameAge").textContent = Number(job.frame_age_ms || 0).toFixed(0) + " ms";
+    $("metricReceived").textContent = String(job.input_frames_received || 0) + " مستلم";
+    $("analysisActiveTracks").textContent = String(currentTracks.length);
+    $("analysisInferenceLatency").textContent =
+      Number(job.inference_latency_ms || 0).toFixed(0) + " ms";
+    $("analysisFrameAge").textContent = Number(job.frame_age_ms || 0).toFixed(0) + " ms";
+    $("analysisFps").textContent = Number(job.processing_fps || 0).toFixed(2) + " FPS";
+    $("analysisReceived").textContent = String(job.input_frames_received || 0);
+    $("analysisDropped").textContent = String(job.input_frames_dropped || 0);
     setMetrics(job);
   }
 
