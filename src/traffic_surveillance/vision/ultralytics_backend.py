@@ -15,6 +15,8 @@ class UltralyticsTrackingBackend:
         tracker: str = "bytetrack.yaml",
         confidence: float = 0.25,
         device: str | None = None,
+        inference_size: int = 512,
+        max_det: int = 60,
         vehicle_model_path: str | Path | None = None,
         enable_pretrained_attributes: bool = False,
     ) -> None:
@@ -49,10 +51,14 @@ class UltralyticsTrackingBackend:
                 raise ValueError(
                     "Vehicle model weights must be an Ultralytics classification model."
                 )
+        if inference_size not in {320, 384, 416, 448, 512, 640}:
+            raise ValueError("inference_size must be one of 320, 384, 416, 448, 512 or 640.")
+        if not 1 <= max_det <= 300:
+            raise ValueError("max_det must be between 1 and 300.")
         self._tracker = tracker
         self._confidence = confidence
-        self._imgsz = 512
-        self._max_det = 60
+        self._imgsz = inference_size
+        self._max_det = max_det
         self._classes = [0, 1, 2, 3, 5, 7]
         if device is None:
             try:
