@@ -120,3 +120,36 @@ def test_mjpeg_preview_stream_and_lab_report_routes(tmp_path):
     assert report.json()["summary"]["frames_processed"] == 5
     assert tracks.status_code == 200
     assert tracks.json()[0]["track_id"] == 42
+
+
+def test_live_runtime_profile_reads_colab_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_PROFILE", "colab-test")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE", "416")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_DET", "24")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH", "800")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_TRACKER", "bytetrack.yaml")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_DURATION_SECONDS", "0")
+
+    from traffic_surveillance.api.lab_routes import LiveLabRequest
+
+    request = LiveLabRequest(source="phone-camera:road-01")
+    assert request.duration_seconds == 0
+    assert request.max_width == 800
+    assert request.tracker == "bytetrack.yaml"
+
+    app = create_app(
+        Settings(
+            environment="test",
+            database=str(tmp_path / "events.sqlite3"),
+            lab_storage_dir=str(tmp_path / "lab"),
+        )
+    )
+    client = TestClient(app)
+    profile = client.get("/api/v1/lab/capabilities").json()["realtime_profile"]
+    assert profile["profile"] == "colab-test"
+    assert profile["input_width"] == 800
+    assert profile["inference_size"] == 416
+    assert profile["max_det"] == 24
+    assert profile["tracker"] == "bytetrack.yaml"
+    assert profile["live_video_recording"] is False
+    assert profile["continuous_until_stopped"] is True
