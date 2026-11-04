@@ -210,7 +210,7 @@
           <div class="progress-block">
             <div class="progress-info"><span id="jobState">بانتظار اختيار مصدر</span><b id="progressText">0%</b></div>
             <div class="progress-track"><span id="progressBar"></span></div>
-            <div class="progress-meta"><span id="frameProgress">0 إطار محلل</span><span id="processingFps">0 FPS</span><span id="metricLatency">— ms / استدلال</span><span id="metricFrameAge">— ms / تأخر الإطار</span><span id="metricRealtime">— × زمن المصدر</span><span id="metricReceived">0 مستلم</span><span id="metricDropped">0 ساقط</span><span id="metricDuration">—</span></div>
+            <div class="progress-meta"><span id="frameProgress">0 إطار محلل</span><span id="processingFps">0 FPS / تحليل</span><span id="metricInputFps">— FPS / استقبال</span><span id="metricLatency">— ms / استدلال</span><span id="metricFrameAge">— ms / تأخر الإطار</span><span id="metricRealtime">— × زمن المصدر</span><span id="metricReceived">0 مستلم</span><span id="metricDropped">0 ساقط</span><span id="metricDuration">—</span></div>
           </div>
           <div id="resultVideoWrap" class="result-video" hidden>
             <div class="result-title"><b>التسجيل المعالج</b><a id="downloadVideo" href="#" download>تنزيل الفيديو <span>↓</span></a></div>
@@ -256,7 +256,8 @@
             <article><small>هويات نشطة</small><strong id="analysisActiveTracks">0</strong></article>
             <article><small>زمن الاستدلال</small><strong id="analysisInferenceLatency">— ms</strong></article>
             <article><small>عمر الإطار</small><strong id="analysisFrameAge">— ms</strong></article>
-            <article><small>معدل المعالجة</small><strong id="analysisFps">— FPS</strong></article>
+            <article><small>معدل التحليل</small><strong id="analysisFps">— FPS</strong></article>
+            <article><small>معدل استقبال الهاتف</small><strong id="analysisInputFps">— FPS</strong></article>
             <article><small>إطارات مستلمة</small><strong id="analysisReceived">0</strong></article>
             <article><small>إطارات مستبدلة</small><strong id="analysisDropped">0</strong></article>
           </div>
