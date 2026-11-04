@@ -88,6 +88,7 @@ def test_colab_installs_and_verifies_the_realtime_runtime_updates() -> None:
     assert "max_det" in install_source
     assert "LatestFrameBuffer" in install_source
     assert "received_fps" in install_source
+    assert "ReconnectingPhoneSource" in install_source
 
     profile_source = profile_sources[0]
     assert 'LIVE_PROFILE = "low-latency"' in profile_source
@@ -100,6 +101,8 @@ def test_colab_installs_and_verifies_the_realtime_runtime_updates() -> None:
     assert "TRAFFIC_SURVEILLANCE_LIVE_MAX_DET" in profile_source
     assert "TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH" in profile_source
     assert "TRAFFIC_SURVEILLANCE_LIVE_TRACKER" in profile_source
+    assert "TRAFFIC_SURVEILLANCE_LIVE_RECORDING" in profile_source
+    assert "LIVE_RECORDING = True" in profile_source
 
     supervisor_source = supervisor_sources[0]
     assert "CURRENT_COMMIT != REPO_COMMIT" in supervisor_source
