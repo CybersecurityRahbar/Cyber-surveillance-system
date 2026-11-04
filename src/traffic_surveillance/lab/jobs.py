@@ -38,6 +38,7 @@ class LabJobManager:
             "inference_latency_ms": 0.0,
             "frame_age_ms": 0.0,
             "input_frames_received": 0,
+            "input_fps": 0.0,
             "input_frames_dropped": 0,
             "current_tracks": [],
             "class_counts": {},
