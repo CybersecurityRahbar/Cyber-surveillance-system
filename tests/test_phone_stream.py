@@ -27,11 +27,10 @@ def test_latest_frame_buffer_drops_stale_frames_and_keeps_latest():
     assert source.dropped_frames == 1
     packet = source.read_frame(timeout=0.1)
     assert packet is not None
-    frame, received_at, received_at_utc = packet
+    frame, received_at = packet
     assert frame.shape == (48, 64, 3)
     assert frame.mean() > 150
     assert received_at > 0
-    assert received_at_utc.endswith("+00:00")
 
     source.close()
     assert source.closed
@@ -107,36 +106,3 @@ def test_latest_frame_buffer_measures_recent_incoming_fps():
     assert source.received_frames == 2
     assert source.received_fps > 0
     source.close()
-
-
-
-def test_reconnecting_phone_source_survives_websocket_replacement():
-    from traffic_surveillance.lab.phone_stream import ReconnectingPhoneSource
-
-    streams = {}
-    source = ReconnectingPhoneSource(streams, "road-01", poll_interval=0.01)
-
-    first = LatestFrameBuffer()
-    streams["road-01"] = first
-    first.push_jpeg(_jpeg(50))
-    packet = source.read_frame(timeout=0.2)
-    assert packet is not None
-    assert packet[0].mean() > 35
-
-    first.close()
-    streams.pop("road-01", None)
-    assert source.closed is False
-    assert source.read_frame(timeout=0.05) is None
-    assert source.closed is False
-
-    second = LatestFrameBuffer()
-    streams["road-01"] = second
-    second.push_jpeg(_jpeg(210))
-    packet = source.read_frame(timeout=0.2)
-    assert packet is not None
-    assert packet[0].mean() > 180
-    assert source.received_frames == 2
-
-    source.close()
-    assert source.closed is True
-    assert source.read_frame(timeout=0.05) is None

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from time import monotonic
 
 import cv2
@@ -89,6 +90,12 @@ def test_lab_processes_video_tracks_vehicle_and_writes_annotated_output(tmp_path
     assert vehicle["object_type"] == "vehicle"
     assert vehicle["frames_seen"] == 10
     assert vehicle["trajectory"]
+    assert "bbox" in vehicle["trajectory"][0]
+    assert vehicle["first_seen_at"]
+    assert vehicle["last_seen_at"]
+    assert vehicle["timestamp_basis"] == "analysis_observed_utc"
+    assert vehicle["manual_review_required"] is True
+    assert vehicle["vehicle_type"] == "CAR"
     assert "vehicle_color" in vehicle
     assert vehicle["make_model_status"] == "model_not_configured_or_no_confident_result"
     assert person["object_type"] == "person"
@@ -212,7 +219,7 @@ class FakeLivePhoneSource:
             return None
         frame = self._frames[self._index]
         self._index += 1
-        return frame, monotonic()
+        return frame, monotonic(), datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
 def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report(tmp_path):
@@ -237,11 +244,14 @@ def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report
     assert latest[0]["track_id"] == 77 or latest[0]["track_id"] == 42
     assert {item["track_id"] for item in latest} == {42, 77}
     assert all("frames_seen" in item and "last_seen_seconds" in item for item in latest)
+    assert all("last_seen_at" in item and "last_bbox" in item for item in latest)
     assert updates[-1]["inference_latency_ms"] >= 0
     assert updates[-1]["frame_age_ms"] >= 0
     assert summary["frames_processed"] == 6
-    assert summary["output_video_available"] is False
-    assert not output.exists()
+    assert summary["output_video_available"] is True
+    assert output.is_file()
+    assert summary["recording"]["enabled"] is True
+    assert summary["recording"]["video_available"] is True
     assert summary["input_frames_received"] == 6
     assert summary["input_frames_dropped"] == 12
     assert summary["tracks"][0]["last_seen_seconds"] >= summary["tracks"][-1]["last_seen_seconds"]

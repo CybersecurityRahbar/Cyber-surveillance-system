@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import UTC, datetime
 from queue import Empty, Full, Queue
-from threading import Event, Lock
+from threading import Lock
 from time import monotonic
 
 
 class LatestFrameBuffer:
-    """Bounded live-video ingress: keep the newest JPEG without building a backlog."""
+    """Bounded live-video ingress: always keep the newest JPEG frame, never a backlog."""
 
     def __init__(self, max_jpeg_bytes: int = 4 * 1024 * 1024) -> None:
-        self._queue: Queue[tuple[bytes, float, str] | None] = Queue(maxsize=1)
+        self._queue: Queue[tuple[bytes, float] | None] = Queue(maxsize=1)
         self._lock = Lock()
         self._closed = False
         self._max_jpeg_bytes = max_jpeg_bytes
@@ -44,9 +43,8 @@ class LatestFrameBuffer:
                 return False
             self.received_frames += 1
             received_at = monotonic()
-            received_at_utc = datetime.now(UTC).isoformat(timespec="milliseconds")
             self._arrival_times.append(received_at)
-            item = (bytes(payload), received_at, received_at_utc)
+            item = (bytes(payload), received_at)
             try:
                 self._queue.put_nowait(item)
             except Full:
@@ -65,7 +63,7 @@ class LatestFrameBuffer:
             return None
         if item is None:
             return None
-        payload, arrived_at, arrived_at_utc = item
+        payload, arrived_at = item
         import cv2
         import numpy as np
 
@@ -73,7 +71,7 @@ class LatestFrameBuffer:
         frame = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
         if frame is None or frame.size == 0:
             return None
-        return frame, arrived_at, arrived_at_utc
+        return frame, arrived_at
 
     def close(self) -> None:
         with self._lock:
@@ -88,84 +86,3 @@ class LatestFrameBuffer:
                 except Empty:
                     pass
                 self._queue.put_nowait(None)
-
-
-class ReconnectingPhoneSource:
-    """Stable lab source that follows a phone camera across WebSocket reconnects."""
-
-    def __init__(
-        self,
-        streams: dict[str, LatestFrameBuffer],
-        camera_id: str,
-        *,
-        poll_interval: float = 0.08,
-    ) -> None:
-        self._streams = streams
-        self.camera_id = camera_id
-        self._poll_interval = max(0.02, poll_interval)
-        self._stopped = Event()
-        self._lock = Lock()
-        self._accounted: dict[int, tuple[LatestFrameBuffer, int, int]] = {}
-        self._received_total = 0
-        self._dropped_total = 0
-
-    def _account(self, stream: LatestFrameBuffer) -> None:
-        key = id(stream)
-        current_received = int(stream.received_frames)
-        current_dropped = int(stream.dropped_frames)
-        with self._lock:
-            previous = self._accounted.get(key)
-            old_received, old_dropped = (previous[1], previous[2]) if previous else (0, 0)
-            self._received_total += max(0, current_received - old_received)
-            self._dropped_total += max(0, current_dropped - old_dropped)
-            self._accounted[key] = (stream, current_received, current_dropped)
-
-    @property
-    def received_frames(self) -> int:
-        stream = self._streams.get(self.camera_id)
-        if stream is not None:
-            self._account(stream)
-        with self._lock:
-            return self._received_total
-
-    @property
-    def dropped_frames(self) -> int:
-        stream = self._streams.get(self.camera_id)
-        if stream is not None:
-            self._account(stream)
-        with self._lock:
-            return self._dropped_total
-
-    @property
-    def received_fps(self) -> float:
-        stream = self._streams.get(self.camera_id)
-        if stream is None or stream.closed:
-            return 0.0
-        return stream.received_fps
-
-    @property
-    def closed(self) -> bool:
-        """True only when the lab job was stopped, not when a phone disconnects."""
-        return self._stopped.is_set()
-
-    def read_frame(self, timeout: float = 1.0):
-        deadline = monotonic() + max(0.0, timeout)
-        while not self._stopped.is_set():
-            stream = self._streams.get(self.camera_id)
-            if stream is not None and not stream.closed:
-                packet = stream.read_frame(
-                    timeout=min(self._poll_interval, max(0.0, deadline - monotonic()))
-                )
-                self._account(stream)
-                if packet is not None:
-                    return packet
-
-            if monotonic() >= deadline:
-                return None
-            self._stopped.wait(
-                min(self._poll_interval, max(0.0, deadline - monotonic()))
-            )
-        return None
-
-    def close(self) -> None:
-        self._stopped.set()

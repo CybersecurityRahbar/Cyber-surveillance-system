@@ -2,7 +2,8 @@ from collections import defaultdict, deque
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event
+from queue import Empty, Full, Queue
+from threading import Event, Thread
 from time import monotonic
 
 from traffic_surveillance.analytics.line_crossing import DirectedLineCounter
@@ -20,6 +21,102 @@ CLASS_LABELS = {
     "bicycle": "BICYCLE",
     "person": "PERSON",
 }
+
+
+class AsyncLiveVideoRecorder:
+    """Write live evidence off the inference thread while retaining a seekable timeline."""
+
+    def __init__(self, path: Path, fps: float, frame_size: tuple[int, int]) -> None:
+        self.path = path
+        self.fps = max(1.0, min(float(fps or 10.0), 30.0))
+        self.frame_size = frame_size
+        self._queue: Queue[tuple[float, object] | None] = Queue(maxsize=4)
+        self._ready = Event()
+        self._thread = Thread(target=self._run, name="live-video-recorder", daemon=True)
+        self._error: str | None = None
+        self._frames_written = 0
+        self._frames_repeated = 0
+        self._frames_dropped = 0
+        self._thread.start()
+        self._ready.wait(timeout=10.0)
+
+    def _run(self) -> None:
+        import cv2
+
+        writer = None
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            writer = cv2.VideoWriter(
+                str(self.path),
+                cv2.VideoWriter_fourcc(*"mp4v"),
+                self.fps,
+                self.frame_size,
+            )
+            if not writer.isOpened():
+                self._error = "OpenCV MP4 writer could not be opened."
+                self._ready.set()
+                return
+            self._ready.set()
+            previous_frame = None
+            previous_time = None
+            while True:
+                item = self._queue.get()
+                if item is None:
+                    break
+                source_time, frame = item
+                if previous_frame is None:
+                    writer.write(frame)
+                    self._frames_written += 1
+                else:
+                    elapsed = max(0.0, source_time - float(previous_time))
+                    slots = max(1, min(int(round(elapsed * self.fps)), int(self.fps * 10)))
+                    for _ in range(max(0, slots - 1)):
+                        writer.write(previous_frame)
+                        self._frames_written += 1
+                        self._frames_repeated += 1
+                    writer.write(frame)
+                    self._frames_written += 1
+                previous_frame = frame
+                previous_time = source_time
+        except Exception as exc:
+            self._error = f"{type(exc).__name__}: {exc}"
+        finally:
+            if writer is not None:
+                writer.release()
+            self._ready.set()
+
+    def submit(self, frame, source_time: float) -> None:
+        if self._error:
+            return
+        item = (float(source_time), frame.copy())
+        try:
+            self._queue.put_nowait(item)
+        except Full:
+            try:
+                self._queue.get_nowait()
+            except Empty:
+                pass
+            self._frames_dropped += 1
+            try:
+                self._queue.put_nowait(item)
+            except Full:
+                self._frames_dropped += 1
+
+    def close(self) -> dict:
+        if self._thread.is_alive():
+            self._queue.put(None)
+            self._thread.join(timeout=30.0)
+        if self._thread.is_alive():
+            self._error = self._error or "Live recorder did not stop within 30 seconds."
+        available = self.path.is_file() and self.path.stat().st_size > 0
+        return {
+            "enabled": True,
+            "frames_written": self._frames_written,
+            "frames_repeated_for_timeline": self._frames_repeated,
+            "frames_dropped_from_recorder_queue": self._frames_dropped,
+            "error": self._error,
+            "video_available": available,
+        }
 
 
 class VideoLabProcessor:
@@ -66,6 +163,8 @@ class VideoLabProcessor:
         container = None
         capture = None
         writer = None
+        live_recorder = None
+        recording_stats: dict = {}
         decoded_frames = None
         start_clock = monotonic()
         started_at = datetime.now(UTC)
@@ -144,6 +243,7 @@ class VideoLabProcessor:
                     if not ok:
                         break
                     frame_received_at = monotonic()
+                    frame_received_at_utc = datetime.now(UTC).isoformat(timespec="milliseconds")
                     media_time = frame_received_at - start_clock
                     timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
                 elif is_phone_stream:
@@ -152,7 +252,11 @@ class VideoLabProcessor:
                         if source.closed:
                             break
                         continue
-                    image, frame_received_at = packet
+                    if len(packet) == 2:
+                        image, frame_received_at = packet
+                        frame_received_at_utc = datetime.now(UTC).isoformat(timespec="milliseconds")
+                    else:
+                        image, frame_received_at, frame_received_at_utc = packet
                     media_time = max(0.0, frame_received_at - start_clock)
                     timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
                 else:
@@ -168,6 +272,7 @@ class VideoLabProcessor:
                         timestamp_quality = TimestampQuality.MEDIA_TIME_ESTIMATED
                     image = frame.to_ndarray(format="bgr24")
                     frame_received_at = monotonic()
+                    frame_received_at_utc = datetime.now(UTC).isoformat(timespec="milliseconds")
 
                 if first_media_time is None:
                     first_media_time = media_time
@@ -191,7 +296,13 @@ class VideoLabProcessor:
                         (0.0, float(line_y)),
                         (float(width - 1), float(line_y)),
                     )
-                    if record_output:
+                    if record_output and realtime_mode:
+                        live_recorder = AsyncLiveVideoRecorder(
+                            destination, fps_source, frame_size
+                        )
+                        if live_recorder._error:
+                            raise RuntimeError(live_recorder._error)
+                    elif record_output:
                         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                         writer = cv2.VideoWriter(
                             str(destination), fourcc, fps_source, frame_size
@@ -205,6 +316,14 @@ class VideoLabProcessor:
                 detections: list[Detection] = self.detector.detect_and_track(image)
                 inference_latency_ms = (monotonic() - inference_started_at) * 1000.0
                 frame_age_ms = max(0.0, monotonic() - frame_received_at) * 1000.0
+                observed_at_utc = (
+                    frame_received_at_utc if realtime_mode
+                    else datetime.now(UTC).isoformat(timespec="milliseconds")
+                )
+                timestamp_basis = (
+                    "server_frame_arrival_utc" if realtime_mode
+                    else "analysis_observed_utc"
+                )
                 current_by_class.clear()
                 display_detections: list[tuple[Detection, str]] = []
 
@@ -233,6 +352,18 @@ class VideoLabProcessor:
                                 "last_frame_index": frame_index,
                                 "first_seen_seconds": round(media_time, 3),
                                 "last_seen_seconds": round(media_time, 3),
+                                "first_seen_at": observed_at_utc,
+                                "last_seen_at": observed_at_utc,
+                                "timestamp_basis": timestamp_basis,
+                                "last_media_time_seconds": round(media_time, 3),
+                                "last_frame_index": frame_index,
+                                "frame_width": width,
+                                "frame_height": height,
+                                "manual_review_required": object_type == "vehicle",
+                                "manual_review_note": (
+                                    "مخرجات اللون/الماركة/الطراز تقديرية؛ يجب المراجعة اليدوية والبصرية."
+                                    if object_type == "vehicle" else None
+                                ),
                                 "frames_seen": 0,
                                 "confidence_sum": 0.0,
                                 "confidence_max": 0.0,
@@ -258,6 +389,12 @@ class VideoLabProcessor:
                         record["frames_seen"] += 1
                         record["last_frame_index"] = frame_index
                         record["last_seen_seconds"] = round(media_time, 3)
+                        record["last_seen_at"] = observed_at_utc
+                        record["timestamp_basis"] = timestamp_basis
+                        record["last_media_time_seconds"] = round(media_time, 3)
+                        record["last_frame_index"] = frame_index
+                        record["frame_width"] = width
+                        record["frame_height"] = height
                         record["confidence_sum"] += detection.confidence
                         record["confidence_max"] = max(
                             record["confidence_max"], detection.confidence
@@ -268,8 +405,12 @@ class VideoLabProcessor:
                                 {
                                     "frame": frame_index,
                                     "time": round(media_time, 3),
+                                    "observed_at": observed_at_utc,
                                     "x": round((detection.box.x1 + detection.box.x2) / 2, 1),
                                     "y": round((detection.box.y1 + detection.box.y2) / 2, 1),
+                                    "bbox": detection.box.model_dump(),
+                                    "frame_width": width,
+                                    "frame_height": height,
                                 }
                             )
                         if (
@@ -351,6 +492,8 @@ class VideoLabProcessor:
                                             "frame_index": frame_index,
                                             "media_time_seconds": media_time,
                                             "timestamp_quality": timestamp_quality.value,
+                                            "observed_at": observed_at_utc,
+                                            "timestamp_basis": timestamp_basis,
                                         }
                                     )
                     elif label in PERSON_CLASSES:
@@ -372,6 +515,8 @@ class VideoLabProcessor:
                 )
                 if writer is not None:
                     writer.write(annotated)
+                if live_recorder is not None:
+                    live_recorder.submit(annotated, media_time)
                 processed_frames += 1
 
                 preview_clock = monotonic()
@@ -448,6 +593,8 @@ class VideoLabProcessor:
                 capture.release()
             if container is not None:
                 container.close()
+            if live_recorder is not None:
+                recording_stats = live_recorder.close()
 
         if processed_frames == 0:
             raise RuntimeError(
@@ -572,6 +719,25 @@ class VideoLabProcessor:
                 record.pop("confidence_sum") / max(1, record["frames_seen"]), 3
             )
             record["confidence_max"] = round(record["confidence_max"], 3)
+            if record.get("object_type") == "vehicle":
+                category = str(record.get("class_label", "UNKNOWN"))
+                record["vehicle_type"] = category
+                record["vehicle_type_method"] = "yolo26n_coco_detection_class"
+                record["vehicle_type_confidence"] = record["average_confidence"]
+                record["manual_review_required"] = True
+                record["manual_review_note"] = (
+                    "تصنيف المركبة واللون والماركة/الطراز نتائج آلية مرشحة، "
+                    "ويجب المراجعة اليدوية والبصرية قبل اعتمادها."
+                )
+                record["make_model_review_required"] = True
+                if record.get("make_model"):
+                    record["make_model_result_type"] = "candidate_not_verified"
+                if record.get("vehicle_color"):
+                    record["vehicle_color_result_type"] = (
+                        "estimated_candidate_manual_review"
+                        if record.get("vehicle_color_method") == "hsv_heuristic"
+                        else "model_candidate_manual_review"
+                    )
             record["duration_seconds"] = round(
                 max(0.0, record["last_seen_seconds"] - record["first_seen_seconds"]), 3
             )
@@ -608,9 +774,13 @@ class VideoLabProcessor:
             ),
             "output_width": frame_size[0] if frame_size else 0,
             "output_height": frame_size[1] if frame_size else 0,
-            "output_video_available": bool(record_output and frame_size),
+            "output_video_available": bool(
+                record_output and destination.is_file() and destination.stat().st_size > 0
+            ),
             "stopped_by_operator": bool(stop_event and stop_event.is_set()),
             "session_started_at": started_at.isoformat(),
+            "session_finished_at": datetime.now(UTC).isoformat(timespec="milliseconds"),
+            "recording": recording_stats,
             "tracks": track_reports,
             "track_reports_count": len(track_reports),
             "vehicle_attribute_status": (
@@ -694,6 +864,13 @@ class VideoLabProcessor:
                     ),
                     "first_seen_seconds": float(record.get("first_seen_seconds", 0.0)),
                     "last_seen_seconds": last_seen,
+                    "first_seen_at": record.get("first_seen_at"),
+                    "last_seen_at": record.get("last_seen_at"),
+                    "timestamp_basis": record.get("timestamp_basis", "unknown"),
+                    "last_media_time_seconds": record.get("last_media_time_seconds", last_seen),
+                    "last_frame_index": int(record.get("last_frame_index", 0)),
+                    "frame_width": int(record.get("frame_width", 0)),
+                    "frame_height": int(record.get("frame_height", 0)),
                     "duration_seconds": round(
                         max(0.0, last_seen - float(record.get("first_seen_seconds", 0.0))),
                         2,
