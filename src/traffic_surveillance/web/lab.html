@@ -25,22 +25,19 @@
 
       <div class="workspace-label">مساحة العمل <span>01</span></div>
       <nav class="nav">
-        <a class="nav-item active" href="/lab">
-          <span class="nav-glyph">◈</span><span>مختبر الرؤية</span><b>LIVE</b>
+        <a class="nav-item active" href="#cameraWall" data-nav="cameraWall">
+          <span class="nav-glyph">▦</span><span>جدار الكاميرات</span><b>01</b>
         </a>
-        <a class="nav-item disabled" href="#" aria-disabled="true">
-          <span class="nav-glyph">▦</span><span>جدار الكاميرات</span><i>قريباً</i>
-        </a>
-        <a class="nav-item disabled" href="#" aria-disabled="true">
+        <a class="nav-item" href="#trafficAnalysis" data-nav="trafficAnalysis">
           <span class="nav-glyph">⌁</span><span>التحليل المروري</span>
         </a>
-        <a class="nav-item disabled" href="#" aria-disabled="true">
+        <a class="nav-item" href="#eventsCenter" data-nav="eventsCenter">
           <span class="nav-glyph">⌖</span><span>مركز الأحداث</span>
         </a>
-        <a class="nav-item disabled" href="#" aria-disabled="true">
+        <a class="nav-item" href="#reportsPanel" data-nav="reportsPanel">
           <span class="nav-glyph">▤</span><span>السجلات والتقارير</span>
         </a>
-        <a class="nav-item disabled" href="#" aria-disabled="true">
+        <a class="nav-item" href="#cameraCalibration" data-nav="cameraCalibration">
           <span class="nav-glyph">⌗</span><span>معايرة الكاميرات</span>
         </a>
       </nav>
@@ -75,12 +72,12 @@
       <section class="hero">
         <div class="hero-copy">
           <div class="eyebrow"><span class="eyebrow-line"></span> VISUAL INTELLIGENCE / SINGLE CAMERA LAB</div>
-          <h1>مختبر <em>الرؤية الحاسوبية</em></h1>
-          <p>بيئة اختبار وتحليل للفيديو المروري، تجمع الكشف والتتبع وتحليل الحركة في مساحة تشغيل واحدة.</p>
+          <h1>مركز <em>الرصد المروري المباشر</em></h1>
+          <p>كشف وتتبع متصل، هويات تتحدث لحظياً، ومؤشرات أداء توضح سرعة الاستدلال وتأخر الإطار.</p>
         </div>
         <div class="hero-state">
           <span class="state-pulse"></span>
-          <div><b>بيئة اختبار مستقلة</b><small>مصدر واحد · لا توجد كاميرا ميدانية مرتبطة</small></div>
+          <div><b id="runtimeComputeStatus">تهيئة محرك الرؤية</b><small id="runtimeComputeDetail">يتم فحص CPU / GPU</small></div>
         </div>
       </section>
 
@@ -183,10 +180,10 @@
           <div id="capabilityNotice" class="notice" hidden></div>
         </section>
 
-        <section class="panel monitor-panel">
+        <section class="panel monitor-panel" id="cameraWall">
           <div class="panel-heading monitor-heading">
             <div class="heading-index">02</div>
-            <div class="heading-text"><h2>شاشة الرادار</h2><p>الفيديو الأصلي بسلاسة أو آخر إطار خضع للتحليل</p></div>
+            <div class="heading-text"><h2>شاشة الرادار</h2><p>آخر إطار مكتشف ومتتبع من الاتصال المباشر</p></div>
             <div class="monitor-actions">
               <button id="toggleAnalysisView" class="secondary-button" type="button" hidden>عرض إطار التحليل</button>
               <button id="fullscreenMonitor" class="secondary-button" type="button">⛶ ملء الشاشة</button>
@@ -213,7 +210,7 @@
           <div class="progress-block">
             <div class="progress-info"><span id="jobState">بانتظار اختيار مصدر</span><b id="progressText">0%</b></div>
             <div class="progress-track"><span id="progressBar"></span></div>
-            <div class="progress-meta"><span id="frameProgress">0 إطار</span><span id="processingFps">0 FPS</span><span id="metricRealtime">— × زمن المصدر</span><span id="metricDropped">0 إطار ساقط</span><span id="metricDuration">—</span></div>
+            <div class="progress-meta"><span id="frameProgress">0 إطار محلل</span><span id="processingFps">0 FPS</span><span id="metricLatency">— ms / استدلال</span><span id="metricFrameAge">— ms / تأخر الإطار</span><span id="metricRealtime">— × زمن المصدر</span><span id="metricReceived">0 مستلم</span><span id="metricDropped">0 ساقط</span><span id="metricDuration">—</span></div>
           </div>
           <div id="resultVideoWrap" class="result-video" hidden>
             <div class="result-title"><b>التسجيل المعالج</b><a id="downloadVideo" href="#" download>تنزيل الفيديو <span>↓</span></a></div>
@@ -248,7 +245,58 @@
         </section>
       </section>
 
-      <section class="panel reports-panel">
+      <section class="operations-grid">
+        <section class="panel operations-panel" id="trafficAnalysis">
+          <div class="panel-heading compact-heading">
+            <div class="heading-index">06</div>
+            <div class="heading-text"><h2>التحليل المروري المباشر</h2><p>مؤشرات اتصال ومعالجة محدثة مع كل إطار محلل</p></div>
+            <span class="heading-tag">REALTIME TELEMETRY</span>
+          </div>
+          <div class="telemetry-grid">
+            <article><small>هويات نشطة</small><strong id="analysisActiveTracks">0</strong></article>
+            <article><small>زمن الاستدلال</small><strong id="analysisInferenceLatency">— ms</strong></article>
+            <article><small>عمر الإطار</small><strong id="analysisFrameAge">— ms</strong></article>
+            <article><small>معدل المعالجة</small><strong id="analysisFps">— FPS</strong></article>
+            <article><small>إطارات مستلمة</small><strong id="analysisReceived">0</strong></article>
+            <article><small>إطارات مستبدلة</small><strong id="analysisDropped">0</strong></article>
+          </div>
+          <div class="telemetry-note" id="analysisRuntimeNote">تظهر بيانات الأداء بعد بدء جلسة مباشرة. لا يتم إنشاء ملف MP4 في نمط الرصد الحي حتى لا يستهلك وقت المعالجة.</div>
+        </section>
+
+        <section class="panel operations-panel" id="eventsCenter">
+          <div class="panel-heading compact-heading">
+            <div class="heading-index">07</div>
+            <div class="heading-text"><h2>مركز الأحداث</h2><p>عبور خط العد والتنبيهات المسجلة من المحرك</p></div>
+            <div class="report-actions">
+              <button id="refreshEvents" class="secondary-button" type="button">تحديث</button>
+              <span id="eventCount" class="heading-tag">0 EVENTS</span>
+            </div>
+          </div>
+          <div class="event-list" id="eventList"><div class="empty-state">لا توجد أحداث مسجلة بعد.</div></div>
+        </section>
+
+        <section class="panel operations-panel" id="cameraCalibration">
+          <div class="panel-heading compact-heading">
+            <div class="heading-index">08</div>
+            <div class="heading-text"><h2>معايرة الكاميرا وخط العد</h2><p>تحديد موضع القياس البصري قبل تشغيل الجلسة</p></div>
+            <span class="heading-tag">CAMERA SETUP</span>
+          </div>
+          <div class="calibration-controls">
+            <label class="range-field" for="calibrationLinePosition">
+              <span>موضع خط العد على الصورة</span>
+              <b id="calibrationLineValue">65%</b>
+              <input id="calibrationLinePosition" type="range" min="10" max="90" value="65" step="1">
+            </label>
+            <div class="calibration-actions">
+              <button id="applyCalibration" class="primary-button" type="button">تطبيق خط العد</button>
+              <span id="calibrationStatus">لم يتم حفظ تعديل محلي</span>
+            </div>
+          </div>
+          <div class="telemetry-note warning-note">قياس السرعة بالكيلومتر/ساعة لا يُفعّل بمجرد تحريك الخط؛ يحتاج أربع نقاط أرضية معلومة المسافات لإنشاء Homography موثوقة، ثم اختباراً ميدانياً. لا يعرض النظام سرعة تقديرية على أنها مخالفة مؤكدة.</div>
+        </section>
+      </section>
+
+      <section class="panel reports-panel" id="reportsPanel">
         <div class="panel-heading compact-heading">
           <div class="heading-index">05</div>
           <div class="heading-text"><h2>تقرير هويات التتبع</h2><p>السجلات المحفوظة لكل مركبة أو شخص في الجلسة</p></div>
@@ -267,7 +315,7 @@
             <tbody id="trackReportBody"><tr><td colspan="8" class="table-empty">لم يتم حفظ تقارير بعد. ابدأ جلسة تحليل لعرض السجلات.</td></tr></tbody>
           </table>
         </div>
-        <div class="report-footer"><span>التقارير تحفظ في قاعدة SQLite الخاصة بجلسة Colab.</span><span id="reportSession">SESSION —</span></div>
+        <div class="report-footer"><span>هويات الجلسة الحالية تظهر هنا فور رصدها؛ تحفظ النسخة النهائية في SQLite عند إنهاء الجلسة.</span><span id="reportSession">SESSION —</span></div>
       </section>
 
       <footer class="app-footer"><span>CYBER SURVEILLANCE SYSTEM <b>·</b> PYTHON CORE</span><span>نتائج الرصد تجريبية وتحتاج التحقق قبل الاستخدام الميداني.</span></footer>
