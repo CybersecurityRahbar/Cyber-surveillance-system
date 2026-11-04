@@ -198,6 +198,16 @@
     return cell;
   }
 
+  function makeTimestampCell(value, basis) {
+    const cell = makeCell(formatTimestamp(value), "track-time");
+    cell.title = basis === "server_frame_arrival_utc"
+      ? "وقت وصول إطار الكاميرا إلى الخادم بتوقيت UTC"
+      : basis === "analysis_observed_utc"
+        ? "وقت تحليل الإطار على الخادم؛ ليس بالضرورة وقت تصوير الفيديو الأصلي"
+        : "مصدر توقيت غير محدد";
+    return cell;
+  }
+
   function renderTrackReport(tracks) {
     const body = $("trackReportBody");
     body.innerHTML = "";

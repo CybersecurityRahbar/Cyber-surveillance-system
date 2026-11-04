@@ -665,3 +665,11 @@ input[type=range] { accent-color: var(--blue); }
   .monitor-actions .secondary-button { font-size: 12px; min-height: 37px; }
   .progress-meta { font-size: 11px; }
 }
+
+
+/* Keep report and event panels keyboard-scrollable, not page-height drivers. */
+.table-scroll:focus-visible,
+.event-list:focus-visible {
+  outline: 2px solid rgba(95, 171, 255, .72);
+  outline-offset: 2px;
+}
