@@ -154,7 +154,7 @@
                 </select>
               </label>
               <label><span>عرض إطار المصدر</span>
-                <select id="maxWidth"><option value="640">640px · سريع</option><option value="960" selected>960px · متوازن</option><option value="1280">1280px · تفاصيل أكثر</option><option value="1920">1920px · دقة مرتفعة</option></select>
+                <select id="maxWidth"><option value="640" selected>640px · أسرع</option><option value="960">960px · تفاصيل أعلى</option><option value="1280">1280px · تفاصيل أكثر</option><option value="1920">1920px · دقة مرتفعة</option></select>
               </label>
             </div>
             <div class="range-field">
@@ -199,6 +199,7 @@
             </div>
             <video id="sourcePlayback" class="source-playback" muted playsinline controls hidden></video>
             <img id="processedPreview" alt="الإطار الحالي بعد الكشف والتتبع" hidden>
+            <canvas id="monitorHighlightCanvas" class="highlight-canvas" aria-hidden="true"></canvas>
             <div id="analysisModeNote" class="analysis-mode-note" hidden>
               تشغيل الفيديو الأصلي بسرعة المصدر. تحليل الذكاء الاصطناعي يعمل بالتوازي؛ اعرض آخر إطار محلل عند الحاجة.
             </div>
@@ -214,7 +215,10 @@
           </div>
           <div id="resultVideoWrap" class="result-video" hidden>
             <div class="result-title"><b>التسجيل المعالج</b><a id="downloadVideo" href="#" download>تنزيل الفيديو <span>↓</span></a></div>
-            <video id="resultVideo" controls playsinline></video>
+            <div class="result-video-player">
+              <video id="resultVideo" controls playsinline></video>
+              <canvas id="resultHighlightCanvas" class="highlight-canvas" aria-hidden="true"></canvas>
+            </div>
           </div>
         </section>
       </section>
@@ -300,7 +304,7 @@
       <section class="panel reports-panel" id="reportsPanel">
         <div class="panel-heading compact-heading">
           <div class="heading-index">05</div>
-          <div class="heading-text"><h2>تقرير هويات التتبع</h2><p>السجلات المحفوظة لكل مركبة أو شخص في الجلسة</p></div>
+          <div class="heading-text"><h2>تقرير هويات التتبع</h2><p>اضغط على هوية أي مركبة للانتقال إلى موضعها الزمني وإظهار إطارها بإطار أصفر</p></div>
           <div class="report-actions">
             <select id="savedReportSelect" class="history-select" aria-label="الجلسات المحفوظة">
               <option value="">تحميل السجلات المحفوظة…</option>
@@ -312,11 +316,11 @@
         </div>
         <div class="table-scroll">
           <table class="track-table">
-            <thead><tr><th>المعرّف</th><th>نوع الجسم</th><th>اللون</th><th>الماركة / الطراز</th><th>مدة الرصد</th><th>الإطارات</th><th>الثقة</th><th>عبور الخط</th></tr></thead>
-            <tbody id="trackReportBody"><tr><td colspan="8" class="table-empty">لم يتم حفظ تقارير بعد. ابدأ جلسة تحليل لعرض السجلات.</td></tr></tbody>
+            <thead><tr><th>المعرّف</th><th>فئة المركبة / الجسم</th><th>اللون المرشح</th><th>الماركة / الطراز المرشح</th><th>أول رصد</th><th>آخر رصد</th><th>مدة الرصد</th><th>الإطارات</th><th>الثقة</th><th>عبور الخط</th></tr></thead>
+            <tbody id="trackReportBody"><tr><td colspan="10" class="table-empty">لم يتم حفظ تقارير بعد. ابدأ جلسة تحليل لعرض السجلات.</td></tr></tbody>
           </table>
         </div>
-        <div class="report-footer"><span>هويات الجلسة الحالية تظهر هنا فور رصدها؛ تحفظ النسخة النهائية في SQLite عند إنهاء الجلسة.</span><span id="reportSession">SESSION —</span></div>
+        <div class="report-footer"><span>اضغط صف المركبة لمراجعة موضعها في الفيديو؛ تنبيه: نتائج السمات مرشحة وتحتاج تحققاً بصرياً يدوياً.</span><span id="reportSession">SESSION —</span></div>
       </section>
 
       <footer class="app-footer"><span>CYBER SURVEILLANCE SYSTEM <b>·</b> PYTHON CORE</span><span>نتائج الرصد تجريبية وتحتاج التحقق قبل الاستخدام الميداني.</span></footer>
