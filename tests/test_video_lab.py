@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from time import monotonic
 
 from traffic_surveillance.domain.models import BoundingBox, Detection
 from traffic_surveillance.lab.video_processor import VideoLabProcessor
@@ -187,3 +188,59 @@ def test_vehicle_colour_estimator_keeps_white_and_black_pixels():
     assert white_confidence > 0
     assert black == "black"
     assert black_confidence > 0
+
+
+class FakeLivePhoneSource:
+    def __init__(self, frame_count=6):
+        self._frames = [
+            np.zeros((240, 320, 3), dtype=np.uint8)
+            for _ in range(frame_count)
+        ]
+        self._index = 0
+        self._closed = False
+        self.received_frames = frame_count
+        self.dropped_frames = frame_count * 2
+
+    @property
+    def closed(self):
+        return self._closed
+
+    def read_frame(self, timeout=1.0):
+        if self._index >= len(self._frames):
+            self._closed = True
+            return None
+        frame = self._frames[self._index]
+        self._index += 1
+        return frame, monotonic()
+
+
+def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report(tmp_path):
+    source = FakeLivePhoneSource()
+    updates = []
+    output = tmp_path / "live-output.mp4"
+
+    summary = VideoLabProcessor(MovingVehicleDetector()).run(
+        source,
+        output,
+        line_position=0.5,
+        max_width=640,
+        live_duration_seconds=None,
+        realtime_mode=True,
+        record_output=False,
+        on_progress=updates.append,
+    )
+
+    live_updates = [item for item in updates if item.get("current_tracks")]
+    assert len(live_updates) >= 2
+    latest = live_updates[-1]["current_tracks"]
+    assert latest[0]["track_id"] == 77 or latest[0]["track_id"] == 42
+    assert {item["track_id"] for item in latest} == {42, 77}
+    assert all("frames_seen" in item and "last_seen_seconds" in item for item in latest)
+    assert live_updates[-1]["inference_latency_ms"] >= 0
+    assert live_updates[-1]["frame_age_ms"] >= 0
+    assert summary["frames_processed"] == 6
+    assert summary["output_video_available"] is False
+    assert not output.exists()
+    assert summary["input_frames_received"] == 6
+    assert summary["input_frames_dropped"] == 12
+    assert summary["tracks"][0]["last_seen_seconds"] >= summary["tracks"][-1]["last_seen_seconds"]
