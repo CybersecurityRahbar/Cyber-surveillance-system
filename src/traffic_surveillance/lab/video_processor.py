@@ -7,7 +7,7 @@ from threading import Event, Thread
 from time import monotonic
 
 from traffic_surveillance.analytics.line_crossing import DirectedLineCounter
-from traffic_surveillance.domain.models import Detection, TimestampQuality
+from traffic_surveillance.domain.models import BoundingBox, Detection, TimestampQuality
 from traffic_surveillance.vision.appearance import estimate_vehicle_color
 
 VEHICLE_CLASSES = {"car", "motorcycle", "motorbike", "bus", "truck", "bicycle"}
@@ -430,8 +430,7 @@ class VideoLabProcessor:
                                 record["_colour_samples"] += 1
 
                         if (
-                            not realtime_mode
-                            and object_type == "vehicle"
+                            object_type == "vehicle"
                             and frame_index % 15 == 0
                         ):
                             box_width = max(1.0, detection.box.x2 - detection.box.x1)
@@ -603,19 +602,42 @@ class VideoLabProcessor:
                 "No video frames were decoded. Check the file/stream, codec and permissions."
             )
 
-        # Heavy fine-grained classification runs once per completed track, outside
-        # the frame loop, so it cannot stall the live preview cadence.
+        # Fine-grained vehicle attributes are evaluated once per completed track,
+        # never in the inference loop. That preserves live preview cadence while
+        # making both file and live-session reports useful after the operator stops.
         classify_crop = getattr(self.detector, "classify_vehicle_crop", None)
-        if not realtime_mode and callable(classify_crop) and on_progress is not None:
+        attribute_started_at = monotonic()
+        vehicle_records = [
+            record for record in track_records.values()
+            if record.get("object_type") == "vehicle"
+        ]
+        if vehicle_records and on_progress is not None:
             on_progress(
                 {
                     "stage": "vehicle_attributes",
-                    "stage_label": "تصنيف لون المركبات ونوعها والماركة المرشحة",
+                    "stage_label": (
+                        "تصنيف لون المركبات ونوعها والماركة المرشحة "
+                        "(بعد انتهاء الرصد)"
+                    ),
                 }
             )
-        for record in (track_records.values() if not realtime_mode else ()):
+        for record in track_records.values():
             crop = record.pop("_best_vehicle_crop", None)
             record.pop("_best_crop_area", None)
+            if crop is not None and not record.get("_colour_votes"):
+                try:
+                    crop_height, crop_width = crop.shape[:2]
+                    crop_box = BoundingBox(
+                        x1=0.0, y1=0.0,
+                        x2=float(crop_width), y2=float(crop_height),
+                    )
+                    colour, colour_confidence = estimate_vehicle_color(crop, crop_box)
+                    if colour and colour_confidence >= 0.22:
+                        record["_colour_votes"][colour] = colour_confidence
+                        record["_colour_confidence_sum"] = colour_confidence
+                        record["_colour_samples"] = 1
+                except Exception as exc:
+                    record["vehicle_colour_estimation_error"] = type(exc).__name__
             prediction = None
             if crop is not None and callable(classify_crop):
                 try:
@@ -662,6 +684,7 @@ class VideoLabProcessor:
                 )
                 record["_make_model_top3"] = make_prediction.get("top3", [])
 
+        attribute_processing_seconds = max(0.0, monotonic() - attribute_started_at)
         elapsed = max(monotonic() - start_clock, 1e-6)
         media_duration = (
             max(0.0, last_media_time - first_media_time)
@@ -790,6 +813,7 @@ class VideoLabProcessor:
             "session_started_at": started_at.isoformat(),
             "session_finished_at": datetime.now(UTC).isoformat(timespec="milliseconds"),
             "recording": recording_stats,
+            "attribute_processing_seconds": round(attribute_processing_seconds, 2),
             "tracks": track_reports,
             "track_reports_count": len(track_reports),
             "vehicle_attribute_status": (

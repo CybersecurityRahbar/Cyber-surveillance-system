@@ -151,6 +151,11 @@ class WeakCustomClassifierDetector(MovingVehicleDetector):
                 "label": "Uncertain Make",
                 "confidence": 0.2,
             },
+            "vehicle_color_model": {
+                "label": "blue",
+                "confidence": 0.86,
+                "top3": [{"label": "blue", "confidence": 0.86}],
+            },
             "make_model_model": {
                 "label": "Toyota Camry 2012",
                 "confidence": 0.93,
@@ -255,3 +260,31 @@ def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report
     assert summary["input_frames_received"] == 6
     assert summary["input_frames_dropped"] == 12
     assert summary["tracks"][0]["last_seen_seconds"] >= summary["tracks"][-1]["last_seen_seconds"]
+
+
+
+def test_live_session_classifies_vehicle_attributes_after_stop_without_blocking_frame_updates(tmp_path):
+    source = FakeLivePhoneSource(frame_count=6)
+    updates = []
+    output = tmp_path / "live-attributes.mp4"
+
+    summary = VideoLabProcessor(WeakCustomClassifierDetector()).run(
+        source,
+        output,
+        line_position=0.5,
+        max_width=640,
+        realtime_mode=True,
+        record_output=True,
+        on_progress=updates.append,
+    )
+
+    vehicle = next(track for track in summary["tracks"] if track["track_id"] == 42)
+    assert any(item.get("current_tracks") for item in updates)
+    assert vehicle["vehicle_color"] == "blue"
+    assert vehicle["vehicle_color_method"] == "learned_efficientnet_b4"
+    assert vehicle["make"] == "Toyota"
+    assert vehicle["model"] == "Camry"
+    assert vehicle["manual_review_required"] is True
+    assert "المراجعة اليدوية" in vehicle["manual_review_note"]
+    assert summary["attribute_processing_seconds"] >= 0
+    assert summary["output_video_available"] is True
