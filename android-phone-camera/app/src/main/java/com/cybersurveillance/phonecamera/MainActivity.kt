@@ -453,29 +453,39 @@ class MainActivity : ComponentActivity() {
         val vPlane = image.planes[2]
         val nv21 = ByteArray(width * height * 3 / 2)
         var position = 0
-        val yBuffer = yPlane.buffer
+        val yBuffer = yPlane.buffer.duplicate()
+        val yRow = ByteArray(yPlane.rowStride)
         for (row in 0 until height) {
-            for (col in 0 until width) {
-                nv21[position++] = yBuffer.get(
-                    row * yPlane.rowStride + col * yPlane.pixelStride
-                )
+            yBuffer.position(row * yPlane.rowStride)
+            if (yPlane.pixelStride == 1) {
+                yBuffer.get(yRow, 0, minOf(yPlane.rowStride, yRow.size))
+                System.arraycopy(yRow, 0, nv21, position, width)
+                position += width
+            } else {
+                for (col in 0 until width) {
+                    nv21[position++] = yBuffer.get(
+                        row * yPlane.rowStride + col * yPlane.pixelStride
+                    )
+                }
             }
         }
-        val uBuffer = uPlane.buffer
-        val vBuffer = vPlane.buffer
-        for (row in 0 until height / 2) {
-            for (col in 0 until width / 2) {
-                nv21[position++] = vBuffer.get(
-                    row * vPlane.rowStride + col * vPlane.pixelStride
-                )
-                nv21[position++] = uBuffer.get(
-                    row * uPlane.rowStride + col * uPlane.pixelStride
-                )
+
+        val uBuffer = uPlane.buffer.duplicate()
+        val vBuffer = vPlane.buffer.duplicate()
+        val chromaWidth = width / 2
+        val chromaHeight = height / 2
+        for (row in 0 until chromaHeight) {
+            val uRow = row * uPlane.rowStride
+            val vRow = row * vPlane.rowStride
+            for (col in 0 until chromaWidth) {
+                nv21[position++] = vBuffer.get(vRow + col * vPlane.pixelStride)
+                nv21[position++] = uBuffer.get(uRow + col * uPlane.pixelStride)
             }
         }
+
         val output = ByteArrayOutputStream()
         val yuv = YuvImage(nv21, ImageFormat.NV21, width, height, null)
-        if (!yuv.compressToJpeg(Rect(0, 0, width, height), 68, output)) return null
+        if (!yuv.compressToJpeg(Rect(0, 0, width, height), 60, output)) return null
         return output.toByteArray()
     }
 
