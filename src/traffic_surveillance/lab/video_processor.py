@@ -41,6 +41,8 @@ class VideoLabProcessor:
         on_preview: Callable[[bytes], None] | None = None,
         on_crossing: Callable[[dict], None] | None = None,
         show_hud: bool = False,
+        record_output: bool = True,
+        realtime_mode: bool = False,
     ) -> dict:
         import cv2
 
@@ -54,8 +56,8 @@ class VideoLabProcessor:
 
         if not 0.1 <= line_position <= 0.9:
             raise ValueError("line_position must be between 0.1 and 0.9.")
-        if max_width not in {960, 1280, 1920}:
-            raise ValueError("max_width must be 960, 1280 or 1920.")
+        if max_width not in {640, 800, 960, 1280, 1920}:
+            raise ValueError("max_width must be 640, 800, 960, 1280 or 1920.")
 
         destination = Path(output_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
@@ -141,7 +143,8 @@ class VideoLabProcessor:
                     ok, image = capture.read()
                     if not ok:
                         break
-                    media_time = monotonic() - start_clock
+                    frame_received_at = monotonic()
+                    media_time = frame_received_at - start_clock
                     timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
                 elif is_phone_stream:
                     packet = source.read_frame(timeout=1.0)
@@ -149,8 +152,8 @@ class VideoLabProcessor:
                         if source.closed:
                             break
                         continue
-                    image, arrived_at = packet
-                    media_time = max(0.0, arrived_at - start_clock)
+                    image, frame_received_at = packet
+                    media_time = max(0.0, frame_received_at - start_clock)
                     timestamp_quality = TimestampQuality.ARRIVAL_MONOTONIC
                 else:
                     try:
@@ -164,6 +167,7 @@ class VideoLabProcessor:
                         media_time = frame_index / fps_source
                         timestamp_quality = TimestampQuality.MEDIA_TIME_ESTIMATED
                     image = frame.to_ndarray(format="bgr24")
+                    frame_received_at = monotonic()
 
                 if first_media_time is None:
                     first_media_time = media_time
@@ -180,21 +184,26 @@ class VideoLabProcessor:
                     )
                     height, width = image.shape[:2]
 
-                if writer is None:
+                if line_counter is None:
                     frame_size = (width, height)
                     line_y = int(height * line_position)
                     line_counter = DirectedLineCounter(
                         (0.0, float(line_y)),
                         (float(width - 1), float(line_y)),
                     )
-                    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                    writer = cv2.VideoWriter(str(destination), fourcc, fps_source, frame_size)
-                    if not writer.isOpened():
-                        raise RuntimeError(
-                            "Could not initialize MP4 writer. Check OpenCV video codec support."
+                    if record_output:
+                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                        writer = cv2.VideoWriter(
+                            str(destination), fourcc, fps_source, frame_size
                         )
+                        if not writer.isOpened():
+                            raise RuntimeError(
+                                "Could not initialize MP4 writer. Check OpenCV video codec support."
+                            )
 
+                inference_started_at = monotonic()
                 detections: list[Detection] = self.detector.detect_and_track(image)
+                inference_latency_ms = (monotonic() - inference_started_at) * 1000.0
                 current_by_class.clear()
                 display_detections: list[tuple[Detection, str]] = []
 
@@ -262,7 +271,11 @@ class VideoLabProcessor:
                                     "y": round((detection.box.y1 + detection.box.y2) / 2, 1),
                                 }
                             )
-                        if object_type == "vehicle" and frame_index % 10 == 0:
+                        if (
+                            not realtime_mode
+                            and object_type == "vehicle"
+                            and frame_index % 10 == 0
+                        ):
                             colour, colour_confidence = estimate_vehicle_color(
                                 image, detection.box
                             )
@@ -272,7 +285,11 @@ class VideoLabProcessor:
                                 record["_colour_confidence_sum"] += colour_confidence
                                 record["_colour_samples"] += 1
 
-                        if object_type == "vehicle" and frame_index % 15 == 0:
+                        if (
+                            not realtime_mode
+                            and object_type == "vehicle"
+                            and frame_index % 15 == 0
+                        ):
                             box_width = max(1.0, detection.box.x2 - detection.box.x1)
                             box_height = max(1.0, detection.box.y2 - detection.box.y1)
                             crop_area = box_width * box_height
@@ -352,7 +369,8 @@ class VideoLabProcessor:
                     crossing_counts=crossing_counts,
                     show_hud=show_hud,
                 )
-                writer.write(annotated)
+                if writer is not None:
+                    writer.write(annotated)
                 processed_frames += 1
 
                 preview_clock = monotonic()
@@ -370,7 +388,9 @@ class VideoLabProcessor:
                         last_preview_at = preview_clock
 
                 if on_progress is not None and (
-                    processed_frames == 1 or processed_frames % 5 == 0
+                    realtime_mode
+                    or processed_frames == 1
+                    or processed_frames % 5 == 0
                 ):
                     if total_frames:
                         percent = min(99.0, processed_frames * 100.0 / total_frames)
@@ -406,20 +426,13 @@ class VideoLabProcessor:
                                 getattr(source, "dropped_frames", 0)
                                 if is_phone_stream else 0
                             ),
-                            "current_tracks": [
-                                {
-                                    "track_id": item.track_id,
-                                    "class_label": display_label,
-                                    "object_type": (
-                                        "vehicle" if item.label.lower() in VEHICLE_CLASSES
-                                        else "person" if item.label.lower() in PERSON_CLASSES
-                                        else "other"
-                                    ),
-                                    "confidence": round(item.confidence, 3),
-                                }
-                                for item, display_label in display_detections
-                                if item.track_id is not None
-                            ],
+                            "inference_latency_ms": round(inference_latency_ms, 1),
+                            "frame_age_ms": round(
+                                max(0.0, monotonic() - frame_received_at) * 1000.0, 1
+                            ),
+                            "current_tracks": self._live_track_snapshot(
+                                track_records, media_time
+                            ),
                         }
                     )
                 frame_index += 1
@@ -440,7 +453,7 @@ class VideoLabProcessor:
         # Heavy fine-grained classification runs once per completed track, outside
         # the frame loop, so it cannot stall the live preview cadence.
         classify_crop = getattr(self.detector, "classify_vehicle_crop", None)
-        for record in track_records.values():
+        for record in (track_records.values() if not realtime_mode else ()):
             crop = record.pop("_best_vehicle_crop", None)
             record.pop("_best_crop_area", None)
             prediction = None
@@ -560,7 +573,10 @@ class VideoLabProcessor:
             )
             record["vehicle_color_samples"] = colour_samples
             track_reports.append(record)
-        track_reports.sort(key=lambda item: (item["first_seen_seconds"], item["track_id"]))
+        track_reports.sort(
+            key=lambda item: (item["last_seen_seconds"], item["track_id"]),
+            reverse=True,
+        )
 
         result = {
             "frames_processed": processed_frames,
@@ -585,6 +601,7 @@ class VideoLabProcessor:
             ),
             "output_width": frame_size[0] if frame_size else 0,
             "output_height": frame_size[1] if frame_size else 0,
+            "output_video_available": bool(record_output and frame_size),
             "stopped_by_operator": bool(stop_event and stop_event.is_set()),
             "session_started_at": started_at.isoformat(),
             "tracks": track_reports,
@@ -628,10 +645,60 @@ class VideoLabProcessor:
                     "unique_vehicle_tracks": len(unique_vehicle_ids),
                     "unique_person_tracks": len(unique_person_ids),
                     "line_crossings": dict(crossing_counts),
-                    "current_tracks": [],
+                    "current_tracks": track_reports,
+                    "input_frames_received": result["input_frames_received"],
+                    "input_frames_dropped": result["input_frames_dropped"],
                 }
             )
         return result
+
+    @staticmethod
+    def _live_track_snapshot(
+        track_records: dict[int, dict],
+        media_time: float,
+        *,
+        active_window_seconds: float = 3.0,
+    ) -> list[dict]:
+        """Return JSON-safe active identities, ordered by most recent observation."""
+        active = []
+        for record in track_records.values():
+            last_seen = float(record.get("last_seen_seconds", 0.0))
+            if media_time - last_seen > active_window_seconds:
+                continue
+            frames_seen = max(1, int(record.get("frames_seen", 0)))
+            colour_votes = record.get("_colour_votes", {})
+            colour = (
+                max(colour_votes.items(), key=lambda item: item[1])[0]
+                if colour_votes else None
+            )
+            active.append(
+                {
+                    "track_id": int(record["track_id"]),
+                    "object_type": record["object_type"],
+                    "class_label": record["class_label"],
+                    "confidence": round(
+                        float(record.get("confidence_sum", 0.0)) / frames_seen, 3
+                    ),
+                    "average_confidence": round(
+                        float(record.get("confidence_sum", 0.0)) / frames_seen, 3
+                    ),
+                    "first_seen_seconds": float(record.get("first_seen_seconds", 0.0)),
+                    "last_seen_seconds": last_seen,
+                    "duration_seconds": round(
+                        max(0.0, last_seen - float(record.get("first_seen_seconds", 0.0))),
+                        2,
+                    ),
+                    "frames_seen": int(record.get("frames_seen", 0)),
+                    "vehicle_color": colour,
+                    "line_crossings": list(record.get("line_crossings", [])),
+                    "last_bbox": record.get("last_bbox"),
+                }
+            )
+        active.sort(
+            key=lambda item: (item["last_seen_seconds"], item["track_id"]),
+            reverse=True,
+        )
+        return active[:100]
 
     @staticmethod
     def _class_counts(track_records: dict[int, dict]) -> dict[str, int]:
