@@ -423,6 +423,9 @@ class VideoLabProcessor:
                                 getattr(source, "received_frames", processed_frames)
                                 if is_phone_stream else processed_frames
                             ),
+                            "input_fps": round(
+                                float(getattr(source, "received_fps", 0.0)), 2
+                            ) if is_phone_stream else round(fps_source, 2),
                             "input_frames_dropped": (
                                 getattr(source, "dropped_frames", 0)
                                 if is_phone_stream else 0
@@ -595,6 +598,9 @@ class VideoLabProcessor:
                 getattr(source, "received_frames", processed_frames)
                 if is_phone_stream else processed_frames
             ),
+            "input_fps": round(
+                float(getattr(source, "received_fps", 0.0)), 2
+            ) if is_phone_stream else round(fps_source, 2),
             "input_frames_dropped": (
                 getattr(source, "dropped_frames", 0) if is_phone_stream else 0
             ),
