@@ -24,6 +24,7 @@ from traffic_surveillance.api.auth import require_api_key
 from traffic_surveillance.domain.models import EventType, Severity, SurveillanceEvent
 from traffic_surveillance.lab.jobs import LabJobManager
 from traffic_surveillance.lab.video_processor import VideoLabProcessor
+from traffic_surveillance.lab.phone_stream import ReconnectingPhoneSource
 from traffic_surveillance.vision.ultralytics_backend import UltralyticsTrackingBackend
 
 router = APIRouter(
@@ -87,7 +88,8 @@ def _live_runtime_profile() -> dict:
         "max_det": max_det,
         "max_width": max_width,
         "tracker": tracker,
-        "record_output": False,
+        "record_output": os.getenv("TRAFFIC_SURVEILLANCE_LIVE_RECORDING", "1").strip().lower()
+        not in {"0", "false", "no", "off"},
     }
 
 
@@ -197,25 +199,35 @@ def _run_job(
     live_duration_seconds: int | None,
     show_hud: bool,
     realtime_mode: bool = False,
+    inference_size: int = 384,
+    max_det: int = 40,
 ) -> None:
     manager: LabJobManager = runtime_state.lab_jobs
     stop_event = manager.stop_event(job_id)
     manager.update(
         job_id,
         status="running",
+        stage="initializing",
+        stage_label="تهيئة محرك التحليل",
         started_at=datetime.now(UTC).isoformat(),
         error=None,
     )
     try:
         live_profile = _live_runtime_profile() if realtime_mode else {}
+        manager.update(
+            job_id,
+            stage="detection_and_tracking",
+            stage_label="الكشف والتتبع",
+            profile=live_profile.get("profile", "file-balanced-fast"),
+        )
         detector = UltralyticsTrackingBackend(
             runtime_state.settings.model_path,
             tracker=tracker,
             confidence=confidence,
             inference_size=(
-                live_profile["inference_size"] if realtime_mode else 512
+                live_profile["inference_size"] if realtime_mode else inference_size
             ),
-            max_det=live_profile["max_det"] if realtime_mode else 60,
+            max_det=live_profile["max_det"] if realtime_mode else max_det,
             vehicle_model_path=runtime_state.settings.vehicle_model_path,
             enable_pretrained_attributes=(
                 runtime_state.settings.enable_pretrained_vehicle_attributes
@@ -228,7 +240,10 @@ def _run_job(
                 camera_id=f"lab-{job_id[:8]}",
                 event_type=EventType.LINE_CROSSING,
                 severity=Severity.INFO,
-                occurred_at=datetime.now(UTC),
+                occurred_at=(
+                    datetime.fromisoformat(item["observed_at"]).astimezone(UTC)
+                    if item.get("observed_at") else datetime.now(UTC)
+                ),
                 title=f"Vehicle crossed the counting line ({item['direction']})",
                 description=(
                     f"{item['class']} with track ID {item['track_id']} crossed "
@@ -242,6 +257,8 @@ def _run_job(
                     "frame_index": item["frame_index"],
                     "media_time_seconds": item["media_time_seconds"],
                     "timestamp_quality": item["timestamp_quality"],
+                    "observed_at": item.get("observed_at"),
+                    "timestamp_basis": item.get("timestamp_basis"),
                 },
             )
             runtime_state.event_store.add_event(event)
@@ -254,7 +271,7 @@ def _run_job(
             live_duration_seconds=live_duration_seconds,
             stop_event=stop_event,
             show_hud=show_hud,
-            record_output=not realtime_mode,
+            record_output=(not realtime_mode) or live_profile.get("record_output", True),
             realtime_mode=realtime_mode,
             on_progress=lambda values: manager.update(job_id, **values),
             on_preview=lambda jpeg: manager.set_preview(job_id, jpeg),
@@ -265,6 +282,8 @@ def _run_job(
         manager.update(
             job_id,
             status=final_status,
+            stage="completed",
+            stage_label="اكتملت المعالجة",
             progress=100.0,
             result=summary,
             video_url=f"/api/v1/lab/jobs/{job_id}/video",
@@ -292,6 +311,8 @@ def _run_job(
         manager.update(
             job_id,
             status="failed",
+            stage="failed",
+            stage_label="فشلت المعالجة",
             error=message,
             finished_at=finished_at,
         )
@@ -332,8 +353,16 @@ async def capabilities(request: Request) -> dict:
             "max_det": live_profile["max_det"],
             "tracker": live_profile["tracker"],
             "profile": live_profile["profile"],
-            "live_video_recording": False,
+            "live_video_recording": live_profile["record_output"],
             "continuous_until_stopped": True,
+        },
+        "file_profile": {
+            "name": "file-balanced-fast",
+            "inference_size": 384,
+            "max_det": 40,
+            "default_input_width": 640,
+            "tracker": "bytetrack.yaml",
+            "vehicle_attributes": "post-processing-after-detection",
         },
         "model": model_path.name,
         "model_file_exists": model_path.is_file(),
@@ -382,13 +411,20 @@ async def create_video_job(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
-    tracker: str = Form(default="models/trackers/cyber_tracktrack_reid.yaml"),
+    tracker: str = Form(default="bytetrack.yaml"),
     confidence: float = Form(default=0.25, ge=0.05, le=0.95),
     line_position: float = Form(default=0.65, ge=0.1, le=0.9),
-    max_width: int = Form(default=960),
+    max_width: int = Form(default=640),
     show_hud: bool = Form(default=False),
+    inference_size: int = Form(default=384, ge=320, le=640),
+    max_det: int = Form(default=40, ge=1, le=300),
 ) -> dict:
     _validate_tracker(tracker)
+    if inference_size not in LIVE_IMAGE_SIZES:
+        raise HTTPException(
+            status_code=422,
+            detail="inference_size must be 320, 384, 416, 448, 512 or 640.",
+        )
     if max_width not in {640, 800, 960, 1280, 1920}:
         raise HTTPException(
             status_code=422,
@@ -444,6 +480,8 @@ async def create_video_job(
             "confidence": confidence,
             "line_position": line_position,
             "max_width": max_width,
+            "inference_size": inference_size,
+            "max_det": max_det,
             "show_hud": show_hud,
             "size_bytes": size,
         },
@@ -461,6 +499,8 @@ async def create_video_job(
         max_width=max_width,
         live_duration_seconds=None,
         show_hud=show_hud,
+        inference_size=inference_size,
+        max_det=max_det,
     )
     return manager.get(job_id)
 
@@ -489,7 +529,7 @@ async def create_live_job(
                     "its secure WebSocket stream first."
                 ),
             )
-        source = stream
+        source = ReconnectingPhoneSource(request.app.state.phone_streams, camera_id)
     manager: LabJobManager = request.app.state.lab_jobs
     job_id = manager.create(
         source_type=source_type,
@@ -502,7 +542,7 @@ async def create_live_job(
             "max_width": payload.max_width,
             "duration_seconds": payload.duration_seconds or None,
             "realtime_mode": True,
-            "record_output": False,
+            "record_output": _live_runtime_profile()["record_output"],
             "show_hud": payload.show_hud,
         },
     )
@@ -523,6 +563,21 @@ async def create_live_job(
         realtime_mode=True,
     )
     return manager.get(job_id)
+
+
+@router.get("/reports/{session_id}/video")
+async def get_lab_report_video(session_id: str, request: Request) -> FileResponse:
+    report = request.app.state.event_store.get_lab_report(session_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Laboratory report not found.")
+    path = Path(request.app.state.settings.lab_storage_dir) / "results" / f"{session_id}.mp4"
+    if not path.is_file() or path.stat().st_size == 0:
+        raise HTTPException(status_code=404, detail="Recorded video is not available for this session.")
+    return FileResponse(
+        path,
+        media_type="video/mp4",
+        filename=f"traffic-session-{session_id[:8]}.mp4",
+    )
 
 
 @router.get("/jobs/{job_id}")

@@ -129,6 +129,7 @@ def test_live_runtime_profile_reads_colab_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH", "800")
     monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_TRACKER", "bytetrack.yaml")
     monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_DURATION_SECONDS", "0")
+    monkeypatch.setenv("TRAFFIC_SURVEILLANCE_LIVE_RECORDING", "0")
 
     from traffic_surveillance.api.lab_routes import LiveLabRequest
 
@@ -152,4 +153,36 @@ def test_live_runtime_profile_reads_colab_environment(monkeypatch, tmp_path):
     assert profile["max_det"] == 24
     assert profile["tracker"] == "bytetrack.yaml"
     assert profile["live_video_recording"] is False
+    assert client.get("/api/v1/lab/capabilities").json()["file_profile"]["inference_size"] == 384
     assert profile["continuous_until_stopped"] is True
+
+
+
+def test_saved_report_video_endpoint_serves_completed_session(tmp_path):
+    settings = Settings(
+        environment="test",
+        database=str(tmp_path / "events.sqlite3"),
+        lab_storage_dir=str(tmp_path / "lab"),
+    )
+    app = create_app(settings)
+    client = TestClient(app)
+    session_id = "session-video-123"
+    report_dir = tmp_path / "lab" / "results"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    video_path = report_dir / f"{session_id}.mp4"
+    video_path.write_bytes(b"test-mp4-content")
+    app.state.event_store.save_lab_report(
+        session_id=session_id,
+        source_type="phone_camera",
+        source_label="Phone camera road-01",
+        filename="Live session",
+        status="completed",
+        started_at="2026-11-04T10:00:00+00:00",
+        finished_at="2026-11-04T10:00:10+00:00",
+        summary={"output_video_available": True},
+        tracks=[],
+    )
+
+    response = client.get(f"/api/v1/lab/reports/{session_id}/video")
+    assert response.status_code == 200
+    assert response.content == b"test-mp4-content"
