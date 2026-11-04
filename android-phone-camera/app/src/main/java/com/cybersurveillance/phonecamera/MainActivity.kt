@@ -39,6 +39,7 @@ import okio.ByteString
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
@@ -62,6 +63,13 @@ class MainActivity : ComponentActivity() {
     private var lastSentAt = 0L
     private var sentFrames = 0
     private var skippedBackpressureFrames = 0
+    private var skippedThrottleFrames = 0
+    private var fpsWindowStartedAt = 0L
+    private var framesInFpsWindow = 0
+    private var totalJpegEncodeMs = 0L
+    private var jpegSamples = 0
+    private var lastCameraWidth = 0
+    private var lastCameraHeight = 0
     private var fullscreen = false
 
     @Volatile
@@ -321,6 +329,11 @@ class MainActivity : ComponentActivity() {
                     sending = true
                     sentFrames = 0
                     skippedBackpressureFrames = 0
+                    skippedThrottleFrames = 0
+                    framesInFpsWindow = 0
+                    totalJpegEncodeMs = 0L
+                    jpegSamples = 0
+                    fpsWindowStartedAt = SystemClock.elapsedRealtime()
                     status("تم الاتصال؛ تهيئة الكاميرا وإرسال الإطارات")
                     bindCamera()
                 }
@@ -400,28 +413,59 @@ class MainActivity : ComponentActivity() {
                 analysis.setAnalyzer(cameraExecutor) { image ->
                     try {
                         val now = SystemClock.elapsedRealtime()
-                        if (sending && now - lastSentAt >= 100) {
-                            val socket = webSocket
-                            if (socket != null && socket.queueSize() < 1_000_000L) {
-                                val jpeg = imageToJpeg(image)
-                                if (jpeg != null && jpeg.size <= 900 * 1024) {
-                                    val accepted = socket.send(ByteString.of(*jpeg))
-                                    if (accepted) {
-                                        lastSentAt = now
-                                        sentFrames += 1
-                                        if (sentFrames % 20 == 0) {
-                                            runOnUiThread {
-                                                status(
-                                                    "البث نشط · " + sentFrames +
-                                                        " إطار · " + skippedBackpressureFrames +
-                                                        " إطار متجاوز بسبب الشبكة"
-                                                )
-                                            }
+                        if (sending) {
+                            lastCameraWidth = image.width
+                            lastCameraHeight = image.height
+                            if (now - lastSentAt < 100) {
+                                skippedThrottleFrames += 1
+                            } else {
+                                val socket = webSocket
+                                if (socket != null && socket.queueSize() < 1_000_000L) {
+                                    val encodeStartedAt = SystemClock.elapsedRealtime()
+                                    val jpeg = imageToJpeg(image)
+                                    val encodeElapsed = SystemClock.elapsedRealtime() - encodeStartedAt
+                                    totalJpegEncodeMs += encodeElapsed
+                                    jpegSamples += 1
+                                    if (jpeg != null && jpeg.size <= 900 * 1024) {
+                                        val accepted = socket.send(ByteString.of(*jpeg))
+                                        if (accepted) {
+                                            lastSentAt = now
+                                            sentFrames += 1
+                                            framesInFpsWindow += 1
                                         }
                                     }
+                                } else {
+                                    skippedBackpressureFrames += 1
                                 }
-                            } else {
-                                skippedBackpressureFrames += 1
+                            }
+
+                            val windowElapsed = now - fpsWindowStartedAt
+                            if (windowElapsed >= 1000) {
+                                val measuredFps = framesInFpsWindow * 1000.0 / windowElapsed
+                                val averageEncodeMs = if (jpegSamples > 0) {
+                                    totalJpegEncodeMs.toDouble() / jpegSamples
+                                } else 0.0
+                                val fpsText = String.format(Locale.US, "%.1f", measuredFps)
+                                val encodeText = String.format(Locale.US, "%.0f", averageEncodeMs)
+                                val width = lastCameraWidth
+                                val height = lastCameraHeight
+                                val sent = sentFrames
+                                val networkSkipped = skippedBackpressureFrames
+                                val throttleSkipped = skippedThrottleFrames
+                                runOnUiThread {
+                                    status(
+                                        "بث حي · " + fpsText + " FPS · " +
+                                            width + "×" + height + " · JPEG " +
+                                            encodeText + "ms · مرسل " + sent +
+                                            " · تخطي شبكة " + networkSkipped +
+                                            " · تخطي معدل " + throttleSkipped
+                                    )
+                                }
+                                fpsWindowStartedAt = now
+                                framesInFpsWindow = 0
+                                totalJpegEncodeMs = 0L
+                                jpegSamples = 0
+                                skippedThrottleFrames = 0
                             }
                         }
                     } catch (error: Exception) {
