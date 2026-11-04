@@ -933,8 +933,13 @@
       if (compute.cuda_available) {
         $("runtimeComputeStatus").textContent = "تسريع GPU متصل";
         $("runtimeComputeDetail").textContent = compute.gpu_name || compute.device;
+        const profile = info.realtime_profile || {};
         $("analysisRuntimeNote").textContent =
-          "ملف الرصد الحي: YOLO26n بحجم استدلال 384، ByteTrack، ودقة إدخال 640px. تم إيقاف ترميز MP4 أثناء البث لتقليل التأخير.";
+          "ملف الرصد الحي: YOLO26n بحجم " +
+          Number(profile.inference_size || 320) + "px، حد " +
+          Number(profile.max_det || 30) + " كشفاً، ByteTrack، وعرض " +
+          Number(profile.input_width || 640) +
+          "px. تسجيل الدليل المرئي يعمل بمسار منفصل محدود الطابور.";
       } else {
         $("runtimeComputeStatus").textContent = "المحرك يعمل على CPU";
         $("runtimeComputeDetail").textContent = "لا يوجد CUDA GPU متاح";

@@ -263,7 +263,9 @@ def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report
 
 
 
-def test_live_session_classifies_vehicle_attributes_after_stop_without_blocking_frame_updates(tmp_path):
+def test_live_session_classifies_vehicle_attributes_after_stop_without_blocking_frame_updates(
+    tmp_path,
+):
     source = FakeLivePhoneSource(frame_count=6)
     updates = []
     output = tmp_path / "live-attributes.mp4"

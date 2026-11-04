@@ -61,7 +61,7 @@ LIVE_WIDTHS = {640, 800, 960}
 def _live_runtime_profile() -> dict:
     """Read the low-latency profile injected by the Colab notebook or environment."""
     try:
-        inference_size = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE", "384"))
+        inference_size = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE", "320"))
         max_det = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_DET", "30"))
         max_width = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH", "640"))
     except ValueError as exc:
@@ -199,8 +199,8 @@ def _run_job(
     live_duration_seconds: int | None,
     show_hud: bool,
     realtime_mode: bool = False,
-    inference_size: int = 384,
-    max_det: int = 40,
+    inference_size: int = 320,
+    max_det: int = 30,
 ) -> None:
     manager: LabJobManager = runtime_state.lab_jobs
     stop_event = manager.stop_event(job_id)
@@ -358,8 +358,8 @@ async def capabilities(request: Request) -> dict:
         },
         "file_profile": {
             "name": "file-balanced-fast",
-            "inference_size": 384,
-            "max_det": 40,
+            "inference_size": 320,
+            "max_det": 30,
             "default_input_width": 640,
             "tracker": "bytetrack.yaml",
             "vehicle_attributes": "post-processing-after-detection",
@@ -416,8 +416,8 @@ async def create_video_job(
     line_position: float = Form(default=0.65, ge=0.1, le=0.9),
     max_width: int = Form(default=640),
     show_hud: bool = Form(default=False),
-    inference_size: int = Form(default=384, ge=320, le=640),
-    max_det: int = Form(default=40, ge=1, le=300),
+    inference_size: int = Form(default=320, ge=320, le=640),
+    max_det: int = Form(default=30, ge=1, le=300),
 ) -> dict:
     _validate_tracker(tracker)
     if inference_size not in LIVE_IMAGE_SIZES:

@@ -153,7 +153,7 @@ def test_live_runtime_profile_reads_colab_environment(monkeypatch, tmp_path):
     assert profile["max_det"] == 24
     assert profile["tracker"] == "bytetrack.yaml"
     assert profile["live_video_recording"] is False
-    assert client.get("/api/v1/lab/capabilities").json()["file_profile"]["inference_size"] == 384
+    assert client.get("/api/v1/lab/capabilities").json()["file_profile"]["inference_size"] == 320
     assert profile["continuous_until_stopped"] is True
 
 

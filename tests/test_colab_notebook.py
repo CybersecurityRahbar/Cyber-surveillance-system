@@ -92,7 +92,7 @@ def test_colab_installs_and_verifies_the_realtime_runtime_updates() -> None:
 
     profile_source = profile_sources[0]
     assert 'LIVE_PROFILE = "low-latency"' in profile_source
-    assert "LIVE_IMAGE_SIZE = 384" in profile_source
+    assert "LIVE_IMAGE_SIZE = 320" in profile_source
     assert "LIVE_MAX_DET = 30" in profile_source
     assert "LIVE_MAX_WIDTH = 640" in profile_source
     assert 'LIVE_TRACKER = "bytetrack.yaml"' in profile_source
