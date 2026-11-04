@@ -13,6 +13,11 @@
     sourcePlaybackMode: false,
     analysisView: false,
     selectedReportId: null,
+    selectedTrackId: null,
+    selectedTrack: null,
+    currentReport: null,
+    currentJobStatus: "idle",
+    trackById: new Map(),
   };
   const terminal = new Set(["completed", "stopped", "failed"]);
   const colourNames = {
@@ -20,6 +25,204 @@
     brown: "بني", gold: "ذهبي", red: "أحمر", orange: "برتقالي",
     yellow: "أصفر", green: "أخضر", blue: "أزرق", pink: "وردي", purple: "بنفسجي",
   };
+
+
+  function formatTimestamp(value) {
+    if (!value) return "وقت غير متاح";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    try {
+      return new Intl.DateTimeFormat("ar-YE", {
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+        fractionalSecondDigits: 3, hourCycle: "h23",
+      }).format(date);
+    } catch (_) {
+      return date.toLocaleString() + "." + String(date.getMilliseconds()).padStart(3, "0");
+    }
+  }
+
+  function clearHighlight(canvasId) {
+    const canvas = $(canvasId);
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    context.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function drawHighlight(canvasId, media, track) {
+    const canvas = $(canvasId);
+    if (!canvas || !media || !track?.last_bbox) {
+      clearHighlight(canvasId);
+      return;
+    }
+    const naturalWidth = media.videoWidth || media.naturalWidth || 0;
+    const naturalHeight = media.videoHeight || media.naturalHeight || 0;
+    if (!naturalWidth || !naturalHeight) {
+      clearHighlight(canvasId);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * ratio);
+    canvas.height = Math.round(rect.height * ratio);
+    const context = canvas.getContext("2d");
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, rect.width, rect.height);
+
+    const scale = Math.min(rect.width / naturalWidth, rect.height / naturalHeight);
+    const renderWidth = naturalWidth * scale;
+    const renderHeight = naturalHeight * scale;
+    const offsetX = (rect.width - renderWidth) / 2;
+    const offsetY = (rect.height - renderHeight) / 2;
+    const sourceWidth = Number(track.frame_width || naturalWidth);
+    const sourceHeight = Number(track.frame_height || naturalHeight);
+    const box = track.last_bbox;
+    const x = offsetX + (Number(box.x1) / sourceWidth) * renderWidth;
+    const y = offsetY + (Number(box.y1) / sourceHeight) * renderHeight;
+    const width = ((Number(box.x2) - Number(box.x1)) / sourceWidth) * renderWidth;
+    const height = ((Number(box.y2) - Number(box.y1)) / sourceHeight) * renderHeight;
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
+
+    context.lineWidth = 3;
+    context.strokeStyle = "#ffd84d";
+    context.shadowColor = "rgba(255,216,77,.8)";
+    context.shadowBlur = 12;
+    context.strokeRect(x, y, width, height);
+    context.shadowBlur = 0;
+    const label = "SELECTED  #" + track.track_id;
+    context.font = "bold 12px Inter, sans-serif";
+    const labelWidth = context.measureText(label).width + 14;
+    const labelY = Math.max(18, y - 5);
+    context.fillStyle = "#ffd84d";
+    context.fillRect(x, Math.max(0, labelY - 18), labelWidth, 20);
+    context.fillStyle = "#17202a";
+    context.fillText(label, x + 7, Math.max(14, labelY - 4));
+  }
+
+  function observationAt(track, mediaTime) {
+    const samples = Array.isArray(track.trajectory) ? track.trajectory : [];
+    const candidates = samples.filter((item) => item && item.bbox);
+    if (!candidates.length || !Number.isFinite(mediaTime)) return track;
+    const nearest = candidates.reduce((best, item) =>
+      Math.abs(Number(item.time || 0) - mediaTime) <
+      Math.abs(Number(best.time || 0) - mediaTime) ? item : best
+    );
+    return {
+      ...track,
+      last_bbox: nearest.bbox,
+      frame_width: nearest.frame_width || track.frame_width,
+      frame_height: nearest.frame_height || track.frame_height,
+    };
+  }
+
+  function redrawSelectedTrack() {
+    const track = state.selectedTrack;
+    if (!track) {
+      clearHighlight("monitorHighlightCanvas");
+      clearHighlight("resultHighlightCanvas");
+      return;
+    }
+    const source = $("sourcePlayback");
+    const preview = $("processedPreview");
+    const result = $("resultVideo");
+    if (!source.hidden) {
+      const current = observationAt(track, Number(source.currentTime || 0));
+      drawHighlight("monitorHighlightCanvas", source, current);
+    } else if (!preview.hidden) {
+      drawHighlight("monitorHighlightCanvas", preview, track);
+    } else {
+      clearHighlight("monitorHighlightCanvas");
+    }
+    if (!$("resultVideoWrap").hidden) {
+      const current = observationAt(track, Number(result.currentTime || 0));
+      drawHighlight("resultHighlightCanvas", result, current);
+    } else {
+      clearHighlight("resultHighlightCanvas");
+    }
+  }
+
+  async function loadReportVideo(sessionId) {
+    const response = await api("/api/v1/lab/reports/" + sessionId + "/video");
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
+    state.videoUrl = url;
+    $("resultVideo").src = url;
+    $("downloadVideo").href = url;
+    $("resultVideoWrap").hidden = false;
+    return url;
+  }
+
+  async function focusTrack(track) {
+    state.selectedTrackId = Number(track.track_id);
+    state.selectedTrack = track;
+    document.querySelectorAll(".live-track-card, .track-report-row").forEach((element) => {
+      element.classList.toggle(
+        "selected-track-row",
+        Number(element.dataset.trackId) === state.selectedTrackId
+      );
+      if (element.classList.contains("live-track-card")) {
+        element.setAttribute("aria-pressed", String(Number(element.dataset.trackId) === state.selectedTrackId));
+      }
+    });
+
+    const mediaTime = Number(
+      track.last_media_time_seconds ?? track.last_seen_seconds ?? 0
+    );
+
+    // During local-file processing, seek the exact source PTS and draw a yellow box.
+    if (state.mode === "file" && state.sourceUrl) {
+      const video = $("sourcePlayback");
+      if (video.src !== state.sourceUrl) video.src = state.sourceUrl;
+      state.analysisView = false;
+      video.hidden = false;
+      $("processedPreview").hidden = true;
+      $("analysisModeNote").hidden = false;
+      $("toggleAnalysisView").hidden = false;
+      $("toggleAnalysisView").textContent = "عرض إطار التحليل";
+      video.pause();
+      const seek = () => {
+        try { video.currentTime = Math.max(0, mediaTime); } catch (_) {}
+        video.pause();
+        redrawSelectedTrack();
+      };
+      if (video.readyState >= 1) seek();
+      else video.addEventListener("loadedmetadata", seek, { once: true });
+      return;
+    }
+
+    // Completed live or previously saved sessions have a timestamped evidence MP4.
+    if (state.videoUrl || state.currentReport?.session_id) {
+      try {
+        if (!state.videoUrl && state.currentReport?.session_id) {
+          await loadReportVideo(state.currentReport.session_id);
+        }
+        const video = $("resultVideo");
+        $("resultVideoWrap").hidden = false;
+        video.pause();
+        const seek = () => {
+          try { video.currentTime = Math.max(0, mediaTime); } catch (_) {}
+          video.pause();
+          redrawSelectedTrack();
+        };
+        if (video.readyState >= 1) seek();
+        else video.addEventListener("loadedmetadata", seek, { once: true });
+        $("resultVideoWrap").scrollIntoView({ behavior: "smooth", block: "nearest" });
+        return;
+      } catch (error) {
+        setNotice("تعذر فتح فيديو الجلسة لهذه الهوية: " + error.message);
+      }
+    }
+
+    // While a live session is still running, the latest analysed frame is the available evidence.
+    $("sourcePlayback").hidden = true;
+    $("processedPreview").hidden = false;
+    redrawSelectedTrack();
+    $("jobState").textContent =
+      "تم تحديد #" + track.track_id + " عند " + formatTimestamp(track.last_seen_at) +
+      " · سيصبح الرجوع الزمني متاحاً من فيديو الجلسة بعد إيقافها.";
+  }
 
   function headers(extra = {}) {
     const result = { ...extra };
@@ -77,6 +280,16 @@
     state.eventTimer = null;
     stopPreviewStream();
     state.jobId = null;
+    state.currentReport = null;
+    state.currentJobStatus = "idle";
+    state.selectedTrackId = null;
+    state.selectedTrack = null;
+    state.trackById.clear();
+    if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+    state.previewUrl = null;
+    $("processedPreview").removeAttribute("src");
+    clearHighlight("monitorHighlightCanvas");
+    clearHighlight("resultHighlightCanvas");
     $("processedPreview").hidden = true;
     $("sourcePlayback").pause();
     $("sourcePlayback").hidden = true;
@@ -86,7 +299,10 @@
     state.analysisView = false;
     $("monitorPlaceholder").hidden = false;
     $("resultVideoWrap").hidden = true;
+    $("resultVideo").pause();
     $("resultVideo").removeAttribute("src");
+    if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
+    state.videoUrl = null;
     $("progressBar").style.width = "0%";
     $("progressText").textContent = "0%";
     $("jobState").textContent = "بانتظار اختيار مصدر";
@@ -96,7 +312,7 @@
     $("startFile").disabled = false;
     $("startLive").disabled = false;
     $("liveTrackList").innerHTML = '<div class="empty-state">ستظهر بيانات الأجسام عند بدء المعالجة</div>';
-    $("trackReportBody").innerHTML = '<tr><td colspan="8" class="table-empty">لم يتم حفظ تقارير بعد.</td></tr>';
+    $("trackReportBody").innerHTML = '<tr><td colspan="10" class="table-empty">لم يتم حفظ تقارير بعد.</td></tr>';
     $("reportCount").textContent = "0 TRACKS";
     $("reportSession").textContent = "SESSION —";
     $("downloadReport").hidden = true;
@@ -169,8 +385,13 @@
       return;
     }
     for (const item of filtered) {
-      const card = document.createElement("div");
-      card.className = "live-track-card" + (item.object_type === "person" ? " person" : "");
+      state.trackById.set(Number(item.track_id), item);
+      const card = document.createElement("button");
+      card.type = "button";
+      card.dataset.trackId = String(item.track_id);
+      card.setAttribute("aria-pressed", String(Number(item.track_id) === state.selectedTrackId));
+      card.className = "live-track-card" + (item.object_type === "person" ? " person" : "") +
+        (Number(item.track_id) === state.selectedTrackId ? " selected-track-row" : "");
       const token = document.createElement("div");
       token.className = "track-token";
       token.textContent = "#" + item.track_id;
@@ -180,13 +401,14 @@
       name.textContent = item.object_type === "person" ? "شخص" : (item.class_label || "مركبة");
       const meta = document.createElement("small");
       const seen = Number(item.frames_seen || 0);
-      meta.textContent = "آخر رصد · " + seen + " إطار · " +
+      meta.textContent = formatTimestamp(item.last_seen_at) + " · " + seen + " إطار · " +
         Number(item.duration_seconds || 0).toFixed(1) + " ث";
       info.append(name, meta);
       const confidence = document.createElement("div");
       confidence.className = "track-confidence";
       confidence.textContent = Math.round((item.confidence || 0) * 100) + "%";
       card.append(token, info, confidence);
+      card.addEventListener("click", () => focusTrack(item).catch((error) => setNotice(error.message)));
       list.appendChild(card);
     }
   }
@@ -203,20 +425,29 @@
     body.innerHTML = "";
     $("reportCount").textContent = (tracks.length || 0) + " TRACKS";
     if (!tracks.length) {
-      body.innerHTML = '<tr><td colspan="8" class="table-empty">لم يتم رصد هويات قابلة للحفظ في هذه الجلسة.</td></tr>';
+      body.innerHTML = '<tr><td colspan="10" class="table-empty">لم يتم رصد هويات قابلة للحفظ في هذه الجلسة.</td></tr>';
       return;
     }
     const ordered = [...tracks].sort((a, b) =>
       Number(b.last_seen_seconds || 0) - Number(a.last_seen_seconds || 0)
     );
     for (const track of ordered) {
+      state.trackById.set(Number(track.track_id), track);
       const row = document.createElement("tr");
+      row.className = "track-report-row" +
+        (Number(track.track_id) === state.selectedTrackId ? " selected-track-row" : "");
+      row.dataset.trackId = String(track.track_id);
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-label", "عرض المركبة أو الجسم رقم " + track.track_id + " في الفيديو");
       row.appendChild(makeCell("#" + track.track_id, "track-id"));
 
       const object = document.createElement("td");
       const chip = document.createElement("span");
       chip.className = "object-chip" + (track.object_type === "person" ? " person" : "");
-      chip.textContent = track.object_type === "person" ? "شخص" : (track.class_label || "مركبة");
+      chip.textContent = track.object_type === "person"
+        ? "شخص"
+        : (track.vehicle_type || track.class_label || "مركبة");
       object.appendChild(chip);
       row.appendChild(object);
 
@@ -227,20 +458,34 @@
       } else if (track.object_type === "person") {
         colourText = "—";
       }
+      if (track.object_type === "vehicle" && track.manual_review_required) {
+        colourText += " · مراجعة يدوية";
+      }
       row.appendChild(makeCell(colourText));
+
       let modelText = "—";
       if (track.object_type === "vehicle") {
         const predictedModel = track.make_model
           || [track.make, track.model].filter(Boolean).join(" ");
         modelText = predictedModel
           ? predictedModel + " · " + Math.round((track.make_model_confidence || 0) * 100) + "%"
-          : "غير متاح — المصنّف غير مهيأ";
+          : "لا توجد نتيجة موثوقة";
+        modelText += " · مرشح يحتاج مراجعة";
       }
       row.appendChild(makeCell(modelText));
+      row.appendChild(makeCell(formatTimestamp(track.first_seen_at), "track-time"));
+      row.appendChild(makeCell(formatTimestamp(track.last_seen_at), "track-time"));
       row.appendChild(makeCell(Number(track.duration_seconds || 0).toFixed(1) + " ث"));
       row.appendChild(makeCell(String(track.frames_seen || 0)));
       row.appendChild(makeCell(Math.round((track.average_confidence || 0) * 100) + "%"));
       row.appendChild(makeCell(String((track.line_crossings || []).length)));
+      row.addEventListener("click", () => focusTrack(track).catch((error) => setNotice(error.message)));
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          focusTrack(track).catch((error) => setNotice(error.message));
+        }
+      });
       body.appendChild(row);
     }
   }
@@ -309,6 +554,12 @@
     state.sourcePlaybackMode = sourcePlaybackMode;
     state.analysisView = false;
     $("monitorSource").textContent = sourceLabel;
+    state.currentJobStatus = "running";
+    state.currentReport = null;
+    state.trackById.clear();
+    $("processedPreview").removeAttribute("src");
+    clearHighlight("monitorHighlightCanvas");
+    clearHighlight("resultHighlightCanvas");
     $("monitorPlaceholder").hidden = true;
     $("sourcePlayback").hidden = !sourcePlaybackMode;
     $("processedPreview").hidden = sourcePlaybackMode;
@@ -417,18 +668,25 @@
           : "<i></i> اكتملت الجلسة";
         if (state.eventTimer) clearInterval(state.eventTimer);
         state.eventTimer = null;
+        state.currentJobStatus = job.status;
         if (job.status === "completed" || job.status === "stopped") {
           $("sourcePlayback").pause();
-          $("sourcePlayback").hidden = true;
-          $("analysisModeNote").hidden = true;
-          $("toggleAnalysisView").hidden = true;
-          if (job.result?.output_video_available) {
-            $("processedPreview").hidden = true;
-            await loadOutput(jobId);
+          if (state.sourcePlaybackMode && state.sourceUrl) {
+            $("sourcePlayback").hidden = false;
+            $("analysisModeNote").hidden = false;
+            $("toggleAnalysisView").hidden = false;
           } else {
+            $("sourcePlayback").hidden = true;
+            $("analysisModeNote").hidden = true;
+            $("toggleAnalysisView").hidden = true;
+          }
+          if (job.result?.output_video_available) {
+            if (!state.sourcePlaybackMode) $("processedPreview").hidden = true;
+            await loadOutput(jobId);
+          } else if (!state.sourcePlaybackMode) {
             $("resultVideoWrap").hidden = true;
             $("processedPreview").hidden = false;
-            $("jobState").textContent = "انتهت جلسة الرصد الحي؛ آخر إطار وبيانات التتبع محفوظة.";
+            $("jobState").textContent = "انتهت جلسة الرصد؛ لا يتوفر ملف فيديو محفوظ لهذه الجلسة.";
           }
           await loadTrackReports(jobId);
           await loadSavedReports();
@@ -459,14 +717,20 @@
       : 0;
     $("metricRealtime").textContent = ratio.toFixed(2) + "× زمن المصدر";
     $("metricDropped").textContent = String(job.input_frames_dropped || 0) + " إطار ساقط";
+    state.currentJobStatus = job.status;
     $("jobState").textContent = job.status === "running"
-      ? "يتم الكشف والتتبع وتحليل الحركة..."
+      ? (job.stage_label || "يتم الكشف والتتبع وتحليل الحركة...")
       : job.status === "queued"
         ? "في قائمة الانتظار..."
         : job.status;
     const currentTracks = job.current_tracks || [];
     renderLiveTracks(currentTracks);
     renderTrackReport(currentTracks);
+    if (state.selectedTrackId != null) {
+      const refreshed = currentTracks.find((item) => Number(item.track_id) === state.selectedTrackId);
+      if (refreshed) state.selectedTrack = refreshed;
+      redrawSelectedTrack();
+    }
     if (state.jobId) {
       $("reportSession").textContent = "LIVE · SESSION " + state.jobId.slice(0, 8).toUpperCase();
     }
@@ -494,6 +758,15 @@
     $("resultVideo").src = url;
     $("resultVideoWrap").hidden = false;
     $("downloadVideo").href = url;
+    if (state.selectedTrack) {
+      const selected = state.selectedTrack;
+      const seek = () => {
+        $("resultVideo").currentTime = Number(selected.last_media_time_seconds ?? selected.last_seen_seconds ?? 0);
+        redrawSelectedTrack();
+      };
+      if ($("resultVideo").readyState >= 1) seek();
+      else $("resultVideo").addEventListener("loadedmetadata", seek, { once: true });
+    }
   }
 
   async function loadTrackReports(jobId) {
@@ -503,6 +776,7 @@
     ]);
     const tracks = await tracksResponse.json();
     const report = await reportResponse.json();
+    state.currentReport = report;
     renderTrackReport(tracks);
     $("reportSession").textContent = "SESSION " + jobId.slice(0, 8).toUpperCase();
     const exportBlob = new Blob(
@@ -536,7 +810,7 @@
         const date = report.finished_at || report.started_at || "";
         const vehicles = report.summary?.unique_vehicle_tracks ?? 0;
         const people = report.summary?.unique_person_tracks ?? 0;
-        option.textContent = date.slice(0, 19).replace("T", " ")
+        option.textContent = formatTimestamp(date)
           + " · " + report.filename + " · " + vehicles + " مركبة / " + people + " شخص";
         select.appendChild(option);
       }
@@ -562,6 +836,7 @@
     ]);
     const report = await reportResponse.json();
     const tracks = await tracksResponse.json();
+    state.currentReport = report;
     state.selectedReportId = sessionId;
     renderTrackReport(tracks);
     $("reportSession").textContent =
@@ -610,7 +885,7 @@
         title.textContent = item.title || item.event_type || "حدث مروري";
         const meta = document.createElement("small");
         const occurred = item.occurred_at
-          ? new Date(item.occurred_at).toLocaleString()
+          ? formatTimestamp(item.occurred_at)
           : "وقت غير محدد";
         meta.textContent = (item.camera_id || "كاميرا") + " · " + occurred;
         details.append(title, meta);
@@ -734,6 +1009,11 @@
       setNotice("تعذر تفعيل ملء الشاشة: " + error.message);
     }
   });
+  $("sourcePlayback").addEventListener("timeupdate", redrawSelectedTrack);
+  $("sourcePlayback").addEventListener("seeked", redrawSelectedTrack);
+  $("resultVideo").addEventListener("timeupdate", redrawSelectedTrack);
+  $("resultVideo").addEventListener("seeked", redrawSelectedTrack);
+  window.addEventListener("resize", redrawSelectedTrack);
   $("toggleAnalysisView").addEventListener("click", () => {
     state.analysisView = !state.analysisView;
     $("sourcePlayback").hidden = state.analysisView;
@@ -747,6 +1027,7 @@
     } else {
       $("sourcePlayback").play().catch(() => {});
     }
+    redrawSelectedTrack();
   });
   $("confidence").addEventListener("input", () =>
     $("confidenceValue").textContent = $("confidence").value + "%"
