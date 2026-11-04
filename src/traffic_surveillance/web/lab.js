@@ -127,6 +127,9 @@
     $("metricReceived").textContent = String(
       job?.input_frames_received ?? job?.result?.input_frames_received ?? 0
     ) + " مستلم";
+    $("metricInputFps").textContent = job
+      ? Number(job.input_fps || job.result?.input_fps || 0).toFixed(2) + " FPS"
+      : "— FPS";
     $("metricDropped").textContent = String(
       job?.input_frames_dropped ?? job?.result?.input_frames_dropped ?? 0
     ) + " ساقط";
@@ -470,11 +473,13 @@
     $("metricLatency").textContent = Number(job.inference_latency_ms || 0).toFixed(0) + " ms";
     $("metricFrameAge").textContent = Number(job.frame_age_ms || 0).toFixed(0) + " ms";
     $("metricReceived").textContent = String(job.input_frames_received || 0) + " مستلم";
+    $("metricInputFps").textContent = Number(job.input_fps || 0).toFixed(2) + " FPS";
     $("analysisActiveTracks").textContent = String(currentTracks.length);
     $("analysisInferenceLatency").textContent =
       Number(job.inference_latency_ms || 0).toFixed(0) + " ms";
     $("analysisFrameAge").textContent = Number(job.frame_age_ms || 0).toFixed(0) + " ms";
     $("analysisFps").textContent = Number(job.processing_fps || 0).toFixed(2) + " FPS";
+    $("analysisInputFps").textContent = Number(job.input_fps || 0).toFixed(2) + " FPS";
     $("analysisReceived").textContent = String(job.input_frames_received || 0);
     $("analysisDropped").textContent = String(job.input_frames_dropped || 0);
     setMetrics(job);
