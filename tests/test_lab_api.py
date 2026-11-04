@@ -17,7 +17,7 @@ def test_lab_ui_and_capabilities_are_available(tmp_path):
     page = client.get("/lab")
     assert page.status_code == 200
     assert "مختبر" in page.text
-    assert "الرؤية الحاسوبية" in page.text
+    assert "الرصد المروري المباشر" in page.text
     assert "liveTrackList" in page.text
     assert "trackReportBody" in page.text
     assert "/lab-assets/lab.js" in page.text
