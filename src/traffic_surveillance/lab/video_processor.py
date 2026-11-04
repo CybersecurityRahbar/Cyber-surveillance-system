@@ -378,10 +378,11 @@ class VideoLabProcessor:
                 if on_preview is not None and (
                     processed_frames == 1 or preview_clock - last_preview_at >= 1.0 / 12.0
                 ):
+                    preview_quality = 58 if realtime_mode else 68
                     ok, encoded = cv2.imencode(
                         ".jpg",
                         annotated,
-                        [int(cv2.IMWRITE_JPEG_QUALITY), 68],
+                        [int(cv2.IMWRITE_JPEG_QUALITY), preview_quality],
                     )
                     if ok:
                         on_preview(encoded.tobytes())
@@ -393,6 +394,7 @@ class VideoLabProcessor:
                     or processed_frames == 1
                     or processed_frames % 5 == 0
                 ):
+                    frame_age_ms = max(0.0, monotonic() - frame_received_at) * 1000.0
                     if total_frames:
                         percent = min(99.0, processed_frames * 100.0 / total_frames)
                     elif live_duration_seconds:
@@ -652,6 +654,7 @@ class VideoLabProcessor:
                     "line_crossings": dict(crossing_counts),
                     "current_tracks": track_reports,
                     "input_frames_received": result["input_frames_received"],
+                    "input_fps": result["input_fps"],
                     "input_frames_dropped": result["input_frames_dropped"],
                     "inference_latency_ms": round(inference_latency_ms, 1),
                     "frame_age_ms": round(frame_age_ms, 1),
