@@ -7,6 +7,8 @@ import android.graphics.ImageFormat
 import android.graphics.Rect
 import android.graphics.YuvImage
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Size
 import android.view.Gravity
@@ -71,6 +73,12 @@ class MainActivity : ComponentActivity() {
     private var lastCameraWidth = 0
     private var lastCameraHeight = 0
     private var fullscreen = false
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var desiredStreaming = false
+    private var retryAttempt = 0
+    private var reconnectRunnable: Runnable? = null
+    private var activeInputs: CameraInputs? = null
+    private var connectionGeneration = 0L
 
     @Volatile
     private var sending = false
@@ -314,18 +322,40 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        val inputs = CameraInputs(base, cameraId, key)
         stopStreaming()
-        val host = base.removePrefix("https://")
-        val streamUrl = "wss://" + host + "/api/v1/phone/stream/" + cameraId
+        desiredStreaming = true
+        activeInputs = inputs
+        retryAttempt = 0
+        openSocket(inputs)
+    }
+
+    private fun isCurrentConnection(generation: Long): Boolean {
+        return desiredStreaming && connectionGeneration == generation
+    }
+
+    private fun openSocket(inputs: CameraInputs) {
+        if (!desiredStreaming) return
+        reconnectRunnable?.let(mainHandler::removeCallbacks)
+        reconnectRunnable = null
+
+        val generation = ++connectionGeneration
+        val host = inputs.endpoint.removePrefix("https://")
+        val streamUrl = "wss://" + host + "/api/v1/phone/stream/" + inputs.cameraId
         val request = Request.Builder()
             .url(streamUrl)
-            .header("X-API-Key", key)
+            .header("X-API-Key", inputs.apiKey)
             .build()
 
         status("جارٍ الاتصال بالخادم…")
         webSocket = httpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(socket: WebSocket, response: Response) {
                 runOnUiThread {
+                    if (!isCurrentConnection(generation)) {
+                        socket.close(1000, "Superseded connection")
+                        return@runOnUiThread
+                    }
+                    retryAttempt = 0
                     sending = true
                     sentFrames = 0
                     skippedBackpressureFrames = 0
@@ -335,12 +365,13 @@ class MainActivity : ComponentActivity() {
                     jpegSamples = 0
                     fpsWindowStartedAt = SystemClock.elapsedRealtime()
                     status("تم الاتصال؛ تهيئة الكاميرا وإرسال الإطارات")
-                    bindCamera()
+                    bindCamera(generation)
                 }
             }
 
             override fun onMessage(socket: WebSocket, text: String) {
                 runOnUiThread {
+                    if (!isCurrentConnection(generation)) return@runOnUiThread
                     if (text.contains("frame_rejected")) {
                         status("رفض الخادم إطار JPEG غير صالح")
                     }
@@ -349,39 +380,82 @@ class MainActivity : ComponentActivity() {
 
             override fun onFailure(socket: WebSocket, t: Throwable, response: Response?) {
                 runOnUiThread {
-                    sending = false
+                    if (!isCurrentConnection(generation)) return@runOnUiThread
                     val detail = if (response != null) {
                         "HTTP " + response.code + " " + response.message
                     } else {
                         t.message ?: "network error"
                     }
-                    status("فشل اتصال البث: " + detail)
-                    unbindCamera()
+                    scheduleReconnect(inputs, generation, "انقطع الاتصال: " + detail, true)
                 }
             }
 
             override fun onClosed(socket: WebSocket, code: Int, reason: String) {
                 runOnUiThread {
-                    sending = false
-                    unbindCamera()
+                    if (!isCurrentConnection(generation)) return@runOnUiThread
+                    val permanent = code == 4400 || code == 4401 || code == 1008
+                    val detail = when (code) {
+                        4400 -> "معرّف الكاميرا غير صالح"
+                        4401 -> "مفتاح API غير مطابق أو غير مضبوط في الخادم"
+                        else -> reason.ifBlank { "أغلق الخادم اتصال البث" }
+                    }
                     if (reason == "Stopped by operator") {
+                        desiredStreaming = false
+                        sending = false
+                        unbindCamera()
                         status("تم إيقاف البث")
                     } else {
-                        val detail = when (code) {
-                            4400 -> "معرّف الكاميرا غير صالح"
-                            4401 -> "مفتاح API غير مطابق أو غير مضبوط في الخادم"
-                            else -> reason.ifBlank { "لا توجد تفاصيل" }
-                        }
-                        status("أُغلق الاتصال (" + code + "): " + detail)
+                        scheduleReconnect(
+                            inputs,
+                            generation,
+                            "أُغلق الاتصال (" + code + "): " + detail,
+                            !permanent
+                        )
                     }
                 }
             }
         })
     }
 
-    private fun bindCamera() {
+    private fun scheduleReconnect(
+        inputs: CameraInputs,
+        generation: Long,
+        reason: String,
+        retryable: Boolean
+    ) {
+        if (!isCurrentConnection(generation)) return
+        sending = false
+        unbindCamera()
+        webSocket = null
+
+        if (!desiredStreaming || !retryable) {
+            desiredStreaming = false
+            activeInputs = null
+            status(reason + if (retryable) "" else " · لن تتم إعادة المحاولة تلقائياً")
+            return
+        }
+
+        // Invalidate callbacks from the failed socket before scheduling another attempt.
+        connectionGeneration += 1
+        val retryGeneration = connectionGeneration
+        val delaySeconds = minOf(30L, 1L shl retryAttempt.coerceAtMost(5))
+        retryAttempt += 1
+        status(reason + " · إعادة المحاولة خلال " + delaySeconds + " ث")
+
+        val retry = Runnable {
+            reconnectRunnable = null
+            if (desiredStreaming && connectionGeneration == retryGeneration) {
+                openSocket(inputs)
+            }
+        }
+        reconnectRunnable = retry
+        mainHandler.postDelayed(retry, delaySeconds * 1000L)
+    }
+
+    private fun bindCamera(generation: Long = connectionGeneration) {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
+            if (!isCurrentConnection(generation)) return@addListener
             try {
                 val provider = future.get()
                 cameraProvider = provider
@@ -537,10 +611,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopStreaming() {
+        desiredStreaming = false
+        activeInputs = null
+        retryAttempt = 0
+        connectionGeneration += 1
+        reconnectRunnable?.let(mainHandler::removeCallbacks)
+        reconnectRunnable = null
+        val socket = webSocket
+        webSocket = null
         sending = false
         unbindCamera()
-        webSocket?.close(1000, "Stopped by operator")
-        webSocket = null
+        socket?.close(1000, "Stopped by operator")
         status("تم إيقاف البث")
     }
 
