@@ -237,8 +237,8 @@ def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report
     assert latest[0]["track_id"] == 77 or latest[0]["track_id"] == 42
     assert {item["track_id"] for item in latest} == {42, 77}
     assert all("frames_seen" in item and "last_seen_seconds" in item for item in latest)
-    assert live_updates[-1]["inference_latency_ms"] >= 0
-    assert live_updates[-1]["frame_age_ms"] >= 0
+    assert updates[-1]["inference_latency_ms"] >= 0
+    assert updates[-1]["frame_age_ms"] >= 0
     assert summary["frames_processed"] == 6
     assert summary["output_video_available"] is False
     assert not output.exists()
