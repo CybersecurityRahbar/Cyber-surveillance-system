@@ -73,6 +73,35 @@ def _supported_environment() -> tuple[bool, list[str]]:
     return not missing, missing
 
 
+def _compute_runtime_info() -> dict:
+    """Expose the actual inference device so CPU-only live sessions are not mistaken for real time."""
+    try:
+        import torch
+    except ImportError:
+        return {
+            "device": "unknown",
+            "cuda_available": False,
+            "gpu_name": None,
+            "torch_version": None,
+        }
+    cuda_available = bool(torch.cuda.is_available())
+    gpu_name = None
+    if cuda_available:
+        try:
+            gpu_name = torch.cuda.get_device_name(0)
+        except Exception:
+            gpu_name = "CUDA device"
+    return {
+        "device": "cuda:0" if cuda_available else "cpu",
+        "cuda_available": cuda_available,
+        "gpu_name": gpu_name,
+        "torch_version": str(torch.__version__),
+        "cuda_version": getattr(torch.version, "cuda", None),
+    }
+
+
+
+
 def _validate_tracker(tracker: str) -> None:
     if tracker not in ALLOWED_TRACKERS:
         raise HTTPException(status_code=422, detail="Unsupported tracker configuration.")
@@ -246,6 +275,15 @@ async def capabilities(request: Request) -> dict:
         "tracking_backend_installed": importlib.util.find_spec("ultralytics") is not None,
         "processing_ready": processing_ready,
         "missing_packages": missing,
+        "compute": _compute_runtime_info(),
+        "realtime_profile": {
+            "model": "YOLO26n",
+            "input_width": 640,
+            "inference_size": 384,
+            "tracker": "ByteTrack",
+            "live_video_recording": False,
+            "continuous_until_stopped": True,
+        },
         "model": model_path.name,
         "model_file_exists": model_path.is_file(),
         "model_will_download_on_first_use": model_alias and not model_path.is_file(),
