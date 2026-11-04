@@ -133,8 +133,8 @@
             <input id="liveSource" class="text-input" dir="ltr" placeholder="rtsp://192.168.1.20:8554/stream">
             <div class="hint">RTSP أو server-camera:0 أو phone-camera:road-01. لتوصيل الهاتف: افتح تطبيق CyberVision Camera وابدأ البث أولاً، ثم استخدم phone-camera:road-01 هنا.</div>
             <div class="inline-fields">
-              <label><span>مدة الجلسة</span><select id="liveDuration"><option value="30">30 ثانية</option><option value="60" selected>دقيقة واحدة</option><option value="180">3 دقائق</option><option value="300">5 دقائق</option></select></label>
-              <label><span>دقة العرض والمعالجة</span><select id="liveWidth"><option value="960" selected>960px</option><option value="1280">1280px</option><option value="1920">1920px</option></select></label>
+              <label><span>مدة الرصد</span><select id="liveDuration"><option value="0" selected>مستمر حتى الإيقاف اليدوي</option><option value="30">30 ثانية</option><option value="60">دقيقة واحدة</option><option value="180">3 دقائق</option><option value="300">5 دقائق</option></select></label>
+              <label><span>دقة الرصد الحي</span><select id="liveWidth"><option value="640" selected>640px · أقل تأخير</option><option value="800">800px · متوازن</option><option value="960">960px · تفاصيل أعلى</option></select></label>
             </div>
             <div class="secure-note">لا تنشر عناوين كاميرات خاصة على الإنترنت دون VPN ومصادقة.</div>
           </div>
@@ -144,8 +144,8 @@
             <div class="field-grid">
               <label><span>خوارزمية التتبع</span>
                 <select id="tracker">
-                  <option value="models/trackers/cyber_tracktrack_reid.yaml" selected>Cyber TrackTrack + ReID · هوية واسترجاع</option>
-                  <option value="bytetrack.yaml">ByteTrack · سريع</option>
+                  <option value="bytetrack.yaml" selected>ByteTrack · سريع للرصد الحي</option>
+                  <option value="models/trackers/cyber_tracktrack_reid.yaml">Cyber TrackTrack + ReID · هوية واسترجاع</option>
                   <option value="botsort.yaml">BoT-SORT · حركة الكاميرا</option>
                   <option value="ocsort.yaml">OC-SORT · حركة غير خطية</option>
                   <option value="deepocsort.yaml">Deep OC-SORT · Re-ID</option>
@@ -154,7 +154,7 @@
                 </select>
               </label>
               <label><span>عرض إطار المصدر</span>
-                <select id="maxWidth"><option value="960" selected>960px · متوازن</option><option value="1280">1280px · تفاصيل أكثر</option><option value="1920">1920px · دقة مرتفعة</option></select>
+                <select id="maxWidth"><option value="640">640px · سريع</option><option value="960" selected>960px · متوازن</option><option value="1280">1280px · تفاصيل أكثر</option><option value="1920">1920px · دقة مرتفعة</option></select>
               </label>
             </div>
             <div class="range-field">
