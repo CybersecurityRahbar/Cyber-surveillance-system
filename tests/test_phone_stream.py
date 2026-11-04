@@ -1,3 +1,5 @@
+import time
+
 import cv2
 import numpy as np
 import pytest
@@ -93,3 +95,14 @@ def test_phone_websocket_reports_invalid_camera_id_after_upgrade(tmp_path):
             websocket.receive_json()
 
     assert exc_info.value.code == 4400
+
+
+def test_latest_frame_buffer_measures_recent_incoming_fps():
+    source = LatestFrameBuffer()
+    assert source.push_jpeg(_jpeg(30))
+    time.sleep(0.02)
+    assert source.push_jpeg(_jpeg(60))
+
+    assert source.received_frames == 2
+    assert source.received_fps > 0
+    source.close()
