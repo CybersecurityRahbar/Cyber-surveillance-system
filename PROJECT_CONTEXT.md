@@ -1612,3 +1612,69 @@ CameraX → MediaCodec H.264 → WebRTC/WHIP → MediaMTX → RTSP داخلي �
 - أحدث CI Python ناجح: `41889818779`, 26 tests passed.
 - أحدث Android build ناجح: `41889819031`, Artifact موجود.
 - الخطوة التالية هي تجربة أداء جديدة من المستخدم وجمع incoming FPS مقابل processing FPS وframe age؛ لا ننتقل إلى ادعاء الجاهزية قبل قياسها.
+
+
+### 21.27 — تحديث دفتر Google Colab نفسه لإحضار أحدث main وضبط إعدادات Live (2026-11-04)
+
+#### سبب الجولة
+- نبّه المستخدم إلى أن تغييرات المحرك والواجهة السابقة لم تكن قد انعكست في دفتر Colab الذي يستخدمه، وأن إعادة تشغيل Runtime وحدها لا تكفي لتحديث الدفتر أو تنفيذ إعداداته الجديدة.
+- تمت مراجعة `notebooks/Google_Colab_Lab.ipynb` فعلياً. كانت خلية المستودع تعتمد `git pull --ff-only` على نسخة working tree الحالية ولا تطبع Commit ID مؤكداً، ولم يكن الدفتر يضبط متغيرات ملف المعالجة الحي الجديد.
+- قررنا جعل الدفتر نفسه مسؤولاً عن تحديث نسخة main والتحقق من أنها هي النسخة التي سيشغلها Uvicorn، إضافة إلى إعداد متغيرات Live الصريحة.
+
+#### تغييرات دفتر Colab
+- الالتزام `cd685642a5c5a617b2a48f74ab8396b7c893664f`:
+  - خلية المستودع تتحقق من وجود Git checkout، وتحدّث origin، ثم تنفذ `git fetch origin main` و`git checkout -B main origin/main` و`git reset --hard origin/main`، وبعدها تطبع `REPO_COMMIT` واسم الفرع.
+  - خلية التثبيت تستورد وحدات التنفيذ الجديدة وتتحقق من وجود:
+    - `VideoLabProcessor.run(realtime_mode, record_output)`
+    - `UltralyticsTrackingBackend(inference_size, max_det)`
+    - `LatestFrameBuffer.received_fps`
+  - إذا كان runtime checkout قديماً أو لا يحتوي هذه التحديثات، تتوقف الخلية برسالة واضحة بدلاً من تشغيل خدمة قديمة بصمت.
+  - أضيفت متغيرات بيئة Live إلى خلية إعداد البيانات قبل بدء الخادم.
+  - خلية الإشراف النهائية تقارن commit الحالي مع commit الذي تم التحقق منه، وترفض بدء الخادم إذا اختلفا، وتعرض commit الذي سيُشغّل.
+- الالتزام `74ca2ce52b82fbf0e8c45ee57b49643497294475`:
+  - تحديث قسم تشغيل الخدمة في Markdown لشرح Incoming FPS وProcessing FPS وInference Latency وFrame Age وReceived/Dropped.
+  - توضيح أن جلسة الهاتف مستمرة حتى الإيقاف اليدوي وأن MP4 لا يُكتب أثناء Live.
+  - تحسين طباعة متغيرات Live الفعلية في الخلية الأخيرة.
+
+#### المتغيرات الجديدة التي يضبطها الدفتر
+- `TRAFFIC_SURVEILLANCE_LIVE_PROFILE=low-latency`
+- `TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE=384`
+- `TRAFFIC_SURVEILLANCE_LIVE_MAX_DET=30`
+- `TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH=640`
+- `TRAFFIC_SURVEILLANCE_LIVE_TRACKER=bytetrack.yaml`
+- `TRAFFIC_SURVEILLANCE_LIVE_DURATION_SECONDS=0` (مستمر حتى الإيقاف اليدوي).
+
+هذه متغيرات إعداد وليست ادعاءً أن الأداء وصل إلى FPS معين. بقية الخيارات في API/UI تتحقق من القيم المسموح بها. ملف Colab يبقي إعدادات attributes الاختيارية متاحة لتحليل الملفات؛ مسار Live يتخطى السمات الثقيلة داخل حلقة الإطار.
+
+#### تغييرات Python التي تجعل إعدادات الدفتر فعّالة
+- الالتزام `38fc4d6a52153e725884b2dbc43972695ffaf1cb`:
+  - إضافة `_live_runtime_profile()` في `src/traffic_surveillance/api/lab_routes.py` لقراءة متغيرات البيئة والتحقق من قيم حجم الاستدلال وعدد الكشوف والعرض والمتتبع.
+  - تمرير إعدادات الحجم وmax_det إلى YOLO عند تشغيل جلسة Live.
+  - استخدام ملف الإعداد نفسه في endpoint القدرات، حتى تعرض الواجهة ملف التشغيل الفعلي.
+  - جعل القيم الافتراضية لطلب Live تقرأ tracker والعرض والمدة من بيئة Colab عند إنشاء التطبيق/الجلسة.
+- الالتزام `0296028b4d25b07cd6ceda81c5b20f3ea235b457`:
+  - اختبارات تضمن تحديث main والتحقق من مصدر runtime ومتغيرات Live وأن خلايا إعداد Colab قابلة للترجمة.
+- الالتزام `0d6b7a8d7b5659ce0a527d3163767b3d1883666f`:
+  - اختبار API يضبط متغيرات البيئة ويثبت أن capabilities وLiveLabRequest تعكسان الملف المهيأ من Colab.
+
+#### نتائج CI
+- Python CI `41893508601` على نسخة الدفتر الأولية `cd685642`: نجاح.
+- Python CI `41893557221` على اختبارات التحقق من الدفتر `0296028b`: نجاح.
+- Python CI `41893613274` على كود تهيئة Live واختبار API `0d6b7a8d`: نجاح.
+  - Ruff وJavaScript syntax وJSON notebook والتحقق البنيوي من خلايا Colab كلها نجحت.
+  - `30 passed, 1 warning in 2.29s`.
+  - رابط CI: https://github.com/CybersecurityRahbar/Cyber-surveillance-system/actions/runs/41893613274
+- آخر تعديل على نص الدفتر وخليته الأخيرة هو `74ca2ce52b82fbf0e8c45ee57b49643497294475`؛ CI الخاص بهذا commit قد يُشغّل بعد حفظ هذا السياق.
+
+#### طريقة فتح الدفتر المحدّث وتشغيله
+- رابط الدفتر الموجود في المستودع:
+  `https://colab.research.google.com/github/CybersecurityRahbar/Cyber-surveillance-system/blob/main/notebooks/Google_Colab_Lab.ipynb`
+- يجب إعادة تحميل صفحة Colab المفتوحة أو فتح الرابط أعلاه مجدداً؛ تحديث ملف GitHub لا يحقن محتوى جديداً تلقائياً في تبويب Colab المفتوح سابقاً.
+- بعد اختيار GPU، نفّذ Runtime → Run all من أول خلية. لا تكتفِ بـ Restart runtime أو إعادة تشغيل الخلية الأخيرة.
+- تأكد من ظهور `Runtime code commit` واسم GPU وملف `low-latency` بالقيم المذكورة قبل الخلية النهائية.
+- بعد بدء الخادم، تعرض `/api/v1/lab/capabilities` إعدادات realtime_profile الفعلية؛ ويمكن التأكد في الواجهة أن حالة المعالج GPU لا CPU.
+
+#### نقطة الاستئناف والحدود
+- دفتر Colab نفسه تم تحديثه على main، وليس فقط ملفات Python أو الواجهة.
+- لم يتم تشغيل دفتر Colab على حساب المستخدم في هذه الجولة، ولم يتم اختبار أداء الهاتف بعد هذا التحديث. نجاح CI يثبت صحة بنية الملفات والاختبارات، ولا يثبت أن Colab GPU متاح للمستخدم أو أن 10 FPS/تأخير أقل من ثانية قد تحققا.
+- الاختبار القادم بعد فتح الدفتر المحدث هو مقارنة Incoming FPS من الهاتف مع Processing FPS وFrame Age وInference Latency لمدة ثلاث دقائق، مع تسجيل GPU وCommit ID.
