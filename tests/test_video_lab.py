@@ -1,6 +1,7 @@
+from time import monotonic
+
 import cv2
 import numpy as np
-from time import monotonic
 
 from traffic_surveillance.domain.models import BoundingBox, Detection
 from traffic_surveillance.lab.video_processor import VideoLabProcessor
