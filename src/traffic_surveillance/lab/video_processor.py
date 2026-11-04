@@ -356,12 +356,14 @@ class VideoLabProcessor:
                                 "last_seen_at": observed_at_utc,
                                 "timestamp_basis": timestamp_basis,
                                 "last_media_time_seconds": round(media_time, 3),
-                                "last_frame_index": frame_index,
                                 "frame_width": width,
                                 "frame_height": height,
                                 "manual_review_required": object_type == "vehicle",
                                 "manual_review_note": (
-                                    "مخرجات اللون/الماركة/الطراز تقديرية؛ يجب المراجعة اليدوية والبصرية."
+                                    (
+                                        "مخرجات اللون/الماركة/الطراز تقديرية؛ "
+                                        "يجب المراجعة اليدوية والبصرية."
+                                    )
                                     if object_type == "vehicle" else None
                                 ),
                                 "frames_seen": 0,
@@ -604,6 +606,13 @@ class VideoLabProcessor:
         # Heavy fine-grained classification runs once per completed track, outside
         # the frame loop, so it cannot stall the live preview cadence.
         classify_crop = getattr(self.detector, "classify_vehicle_crop", None)
+        if not realtime_mode and callable(classify_crop) and on_progress is not None:
+            on_progress(
+                {
+                    "stage": "vehicle_attributes",
+                    "stage_label": "تصنيف لون المركبات ونوعها والماركة المرشحة",
+                }
+            )
         for record in (track_records.values() if not realtime_mode else ()):
             crop = record.pop("_best_vehicle_crop", None)
             record.pop("_best_crop_area", None)

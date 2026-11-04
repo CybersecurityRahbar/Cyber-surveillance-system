@@ -23,8 +23,8 @@ from pydantic import BaseModel, Field
 from traffic_surveillance.api.auth import require_api_key
 from traffic_surveillance.domain.models import EventType, Severity, SurveillanceEvent
 from traffic_surveillance.lab.jobs import LabJobManager
-from traffic_surveillance.lab.video_processor import VideoLabProcessor
 from traffic_surveillance.lab.phone_stream import ReconnectingPhoneSource
+from traffic_surveillance.lab.video_processor import VideoLabProcessor
 from traffic_surveillance.vision.ultralytics_backend import UltralyticsTrackingBackend
 
 router = APIRouter(
@@ -572,7 +572,10 @@ async def get_lab_report_video(session_id: str, request: Request) -> FileRespons
         raise HTTPException(status_code=404, detail="Laboratory report not found.")
     path = Path(request.app.state.settings.lab_storage_dir) / "results" / f"{session_id}.mp4"
     if not path.is_file() or path.stat().st_size == 0:
-        raise HTTPException(status_code=404, detail="Recorded video is not available for this session.")
+        raise HTTPException(
+            status_code=404,
+            detail="Recorded video is not available for this session.",
+        )
     return FileResponse(
         path,
         media_type="video/mp4",
