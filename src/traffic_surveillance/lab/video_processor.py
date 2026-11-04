@@ -204,6 +204,7 @@ class VideoLabProcessor:
                 inference_started_at = monotonic()
                 detections: list[Detection] = self.detector.detect_and_track(image)
                 inference_latency_ms = (monotonic() - inference_started_at) * 1000.0
+                frame_age_ms = max(0.0, monotonic() - frame_received_at) * 1000.0
                 current_by_class.clear()
                 display_detections: list[tuple[Detection, str]] = []
 
@@ -427,9 +428,7 @@ class VideoLabProcessor:
                                 if is_phone_stream else 0
                             ),
                             "inference_latency_ms": round(inference_latency_ms, 1),
-                            "frame_age_ms": round(
-                                max(0.0, monotonic() - frame_received_at) * 1000.0, 1
-                            ),
+                            "frame_age_ms": round(frame_age_ms, 1),
                             "current_tracks": self._live_track_snapshot(
                                 track_records, media_time
                             ),
@@ -648,6 +647,8 @@ class VideoLabProcessor:
                     "current_tracks": track_reports,
                     "input_frames_received": result["input_frames_received"],
                     "input_frames_dropped": result["input_frames_dropped"],
+                    "inference_latency_ms": round(inference_latency_ms, 1),
+                    "frame_age_ms": round(frame_age_ms, 1),
                 }
             )
         return result
