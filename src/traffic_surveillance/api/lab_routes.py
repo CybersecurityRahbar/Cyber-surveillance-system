@@ -74,7 +74,7 @@ def _supported_environment() -> tuple[bool, list[str]]:
 
 
 def _compute_runtime_info() -> dict:
-    """Expose the actual inference device so CPU-only live sessions are not mistaken for real time."""
+    """Expose the actual inference device and detect CPU-only live sessions."""
     try:
         import torch
     except ImportError:
