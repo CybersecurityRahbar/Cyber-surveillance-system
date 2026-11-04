@@ -234,7 +234,7 @@ def test_live_mode_emits_track_identity_updates_without_waiting_for_final_report
         max_width=640,
         live_duration_seconds=None,
         realtime_mode=True,
-        record_output=False,
+        record_output=True,
         on_progress=updates.append,
     )
 
