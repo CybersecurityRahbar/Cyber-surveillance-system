@@ -10,12 +10,7 @@ router = APIRouter()
 
 @router.websocket("/api/v1/phone/stream/{camera_id}")
 async def phone_camera_stream(websocket: WebSocket, camera_id: str) -> None:
-    """Accept authenticated binary JPEG frames from the companion Android camera app.
-
-    Accept the WebSocket handshake before reporting application-level validation
-    failures. A close sent before accept is translated by ASGI/Uvicorn into a
-    generic HTTP 403, which hides whether the camera ID or API key was rejected.
-    """
+    """Accept authenticated binary JPEG frames from the companion Android camera app."""
     await websocket.accept()
 
     if not re.fullmatch(r"[A-Za-z0-9_-]{1,48}", camera_id):
@@ -43,11 +38,10 @@ async def phone_camera_stream(websocket: WebSocket, camera_id: str) -> None:
             if message.get("type") == "websocket.disconnect":
                 break
             payload = message.get("bytes")
-            if payload is not None:
-                if not source.push_jpeg(payload):
-                    await websocket.send_json(
-                        {"status": "frame_rejected", "reason": "invalid_or_oversized_jpeg"}
-                    )
+            if payload is not None and not source.push_jpeg(payload):
+                await websocket.send_json(
+                    {"status": "frame_rejected", "reason": "invalid_or_oversized_jpeg"}
+                )
     except WebSocketDisconnect:
         pass
     finally:
