@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -52,15 +53,59 @@ ALLOWED_TRACKERS = {
     "models/trackers/cyber_tracktrack_reid.yaml",
 }
 CHUNK_SIZE = 1024 * 1024
+LIVE_IMAGE_SIZES = {320, 384, 416, 448, 512, 640}
+LIVE_WIDTHS = {640, 800, 960}
+
+
+def _live_runtime_profile() -> dict:
+    """Read the low-latency profile injected by the Colab notebook or environment."""
+    try:
+        inference_size = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE", "384"))
+        max_det = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_DET", "30"))
+        max_width = int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH", "640"))
+    except ValueError as exc:
+        raise RuntimeError("Live profile numeric settings must be valid integers.") from exc
+
+    tracker = os.getenv("TRAFFIC_SURVEILLANCE_LIVE_TRACKER", "bytetrack.yaml").strip()
+    if inference_size not in LIVE_IMAGE_SIZES:
+        raise RuntimeError(
+            "TRAFFIC_SURVEILLANCE_LIVE_IMAGE_SIZE must be one of "
+            + ", ".join(map(str, sorted(LIVE_IMAGE_SIZES)))
+        )
+    if not 1 <= max_det <= 300:
+        raise RuntimeError("TRAFFIC_SURVEILLANCE_LIVE_MAX_DET must be between 1 and 300.")
+    if max_width not in LIVE_WIDTHS:
+        raise RuntimeError(
+            "TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH must be one of "
+            + ", ".join(map(str, sorted(LIVE_WIDTHS)))
+        )
+    if tracker not in ALLOWED_TRACKERS:
+        raise RuntimeError("TRAFFIC_SURVEILLANCE_LIVE_TRACKER is not an allowed tracker.")
+    return {
+        "profile": os.getenv("TRAFFIC_SURVEILLANCE_LIVE_PROFILE", "low-latency"),
+        "inference_size": inference_size,
+        "max_det": max_det,
+        "max_width": max_width,
+        "tracker": tracker,
+        "record_output": False,
+    }
 
 
 class LiveLabRequest(BaseModel):
     source: str = Field(min_length=1, max_length=2048)
-    duration_seconds: int = Field(default=0, ge=0, le=1800)
-    tracker: str = "bytetrack.yaml"
+    duration_seconds: int = Field(
+        default_factory=lambda: int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_DURATION_SECONDS", "0")),
+        ge=0,
+        le=1800,
+    )
+    tracker: str = Field(
+        default_factory=lambda: os.getenv("TRAFFIC_SURVEILLANCE_LIVE_TRACKER", "bytetrack.yaml")
+    )
     confidence: float = Field(default=0.25, ge=0.05, le=0.95)
     line_position: float = Field(default=0.65, ge=0.1, le=0.9)
-    max_width: int = Field(default=640)
+    max_width: int = Field(
+        default_factory=lambda: int(os.getenv("TRAFFIC_SURVEILLANCE_LIVE_MAX_WIDTH", "640"))
+    )
     show_hud: bool = False
 
 
@@ -162,12 +207,15 @@ def _run_job(
         error=None,
     )
     try:
+        live_profile = _live_runtime_profile() if realtime_mode else {}
         detector = UltralyticsTrackingBackend(
             runtime_state.settings.model_path,
             tracker=tracker,
             confidence=confidence,
-            inference_size=384 if realtime_mode else 512,
-            max_det=30 if realtime_mode else 60,
+            inference_size=(
+                live_profile["inference_size"] if realtime_mode else 512
+            ),
+            max_det=live_profile["max_det"] if realtime_mode else 60,
             vehicle_model_path=runtime_state.settings.vehicle_model_path,
             enable_pretrained_attributes=(
                 runtime_state.settings.enable_pretrained_vehicle_attributes
@@ -266,6 +314,7 @@ async def capabilities(request: Request) -> dict:
     settings = request.app.state.settings
     processing_ready, missing = _supported_environment()
     model_path = Path(settings.model_path)
+    live_profile = _live_runtime_profile()
     model_alias = settings.model_path in {"yolo26n.pt", "yolo26s.pt"}
     return {
         "video_backend_ready": (
@@ -278,9 +327,11 @@ async def capabilities(request: Request) -> dict:
         "compute": _compute_runtime_info(),
         "realtime_profile": {
             "model": "YOLO26n",
-            "input_width": 640,
-            "inference_size": 384,
-            "tracker": "ByteTrack",
+            "input_width": live_profile["max_width"],
+            "inference_size": live_profile["inference_size"],
+            "max_det": live_profile["max_det"],
+            "tracker": live_profile["tracker"],
+            "profile": live_profile["profile"],
             "live_video_recording": False,
             "continuous_until_stopped": True,
         },
