@@ -290,3 +290,58 @@ def test_live_session_classifies_vehicle_attributes_after_stop_without_blocking_
     assert "المراجعة اليدوية" in vehicle["manual_review_note"]
     assert summary["attribute_processing_seconds"] >= 0
     assert summary["output_video_available"] is True
+
+
+
+class BriefVehicleDetector:
+    """Vehicle enters between sampling intervals and is visible for only two frames."""
+
+    def __init__(self):
+        self.index = 0
+
+    def detect_and_track(self, frame):
+        self.index += 1
+        if self.index < 2 or self.index > 3:
+            return []
+        return [
+            Detection(
+                label="car",
+                confidence=0.94,
+                box=BoundingBox(x1=80, y1=80, x2=155, y2=170),
+                track_id=99,
+            )
+        ]
+
+    def classify_vehicle_crop(self, crop):
+        return {
+            "vehicle_color_model": {
+                "label": "red",
+                "confidence": 0.9,
+            },
+            "make_model_model": {
+                "label": "Toyota Camry",
+                "confidence": 0.91,
+                "make": "Toyota",
+                "model": "Camry",
+                "top3": [],
+            },
+        }
+
+
+def test_short_vehicle_track_is_sampled_even_between_global_crop_intervals(tmp_path):
+    source = tmp_path / "brief-sample.mp4"
+    output = tmp_path / "brief-processed.mp4"
+    create_test_video(source)
+
+    summary = VideoLabProcessor(BriefVehicleDetector()).run(
+        source,
+        output,
+        line_position=0.5,
+        max_width=640,
+    )
+
+    vehicle = next(track for track in summary["tracks"] if track["track_id"] == 99)
+    assert vehicle["frames_seen"] == 2
+    assert vehicle["vehicle_color"] == "red"
+    assert vehicle["make"] == "Toyota"
+    assert vehicle["model"] == "Camry"

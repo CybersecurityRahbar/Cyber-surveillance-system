@@ -431,7 +431,10 @@ class VideoLabProcessor:
 
                         if (
                             object_type == "vehicle"
-                            and frame_index % 15 == 0
+                            and (
+                                frame_index % 15 == 0
+                                or "_best_vehicle_crop" not in record
+                            )
                         ):
                             box_width = max(1.0, detection.box.x2 - detection.box.x1)
                             box_height = max(1.0, detection.box.y2 - detection.box.y1)
