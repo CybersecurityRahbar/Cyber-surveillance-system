@@ -56,11 +56,11 @@ CHUNK_SIZE = 1024 * 1024
 
 class LiveLabRequest(BaseModel):
     source: str = Field(min_length=1, max_length=2048)
-    duration_seconds: int = Field(default=60, ge=10, le=1800)
-    tracker: str = "models/trackers/cyber_tracktrack_reid.yaml"
+    duration_seconds: int = Field(default=0, ge=0, le=1800)
+    tracker: str = "bytetrack.yaml"
     confidence: float = Field(default=0.25, ge=0.05, le=0.95)
     line_position: float = Field(default=0.65, ge=0.1, le=0.9)
-    max_width: int = Field(default=960)
+    max_width: int = Field(default=640)
     show_hud: bool = False
 
 
@@ -122,6 +122,7 @@ def _run_job(
     max_width: int,
     live_duration_seconds: int | None,
     show_hud: bool,
+    realtime_mode: bool = False,
 ) -> None:
     manager: LabJobManager = runtime_state.lab_jobs
     stop_event = manager.stop_event(job_id)
@@ -136,6 +137,8 @@ def _run_job(
             runtime_state.settings.model_path,
             tracker=tracker,
             confidence=confidence,
+            inference_size=384 if realtime_mode else 512,
+            max_det=30 if realtime_mode else 60,
             vehicle_model_path=runtime_state.settings.vehicle_model_path,
             enable_pretrained_attributes=(
                 runtime_state.settings.enable_pretrained_vehicle_attributes
@@ -174,6 +177,8 @@ def _run_job(
             live_duration_seconds=live_duration_seconds,
             stop_event=stop_event,
             show_hud=show_hud,
+            record_output=not realtime_mode,
+            realtime_mode=realtime_mode,
             on_progress=lambda values: manager.update(job_id, **values),
             on_preview=lambda jpeg: manager.set_preview(job_id, jpeg),
             on_crossing=on_crossing,
@@ -295,8 +300,11 @@ async def create_video_job(
     show_hud: bool = Form(default=False),
 ) -> dict:
     _validate_tracker(tracker)
-    if max_width not in {960, 1280, 1920}:
-        raise HTTPException(status_code=422, detail="max_width must be 960, 1280 or 1920.")
+    if max_width not in {640, 800, 960, 1280, 1920}:
+        raise HTTPException(
+            status_code=422,
+            detail="max_width must be 640, 800, 960, 1280 or 1920.",
+        )
 
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in ALLOWED_EXTENSIONS:
@@ -375,8 +383,11 @@ async def create_live_job(
     background_tasks: BackgroundTasks,
 ) -> dict:
     _validate_tracker(payload.tracker)
-    if payload.max_width not in {960, 1280, 1920}:
-        raise HTTPException(status_code=422, detail="max_width must be 960, 1280 or 1920.")
+    if payload.max_width not in {640, 800, 960, 1280, 1920}:
+        raise HTTPException(
+            status_code=422,
+            detail="max_width must be 640, 800, 960, 1280 or 1920.",
+        )
     source, source_type, source_label = _source_label(payload.source)
     if source_type == "phone_camera":
         camera_id = source.split(":", 1)[1]
@@ -400,7 +411,9 @@ async def create_live_job(
             "confidence": payload.confidence,
             "line_position": payload.line_position,
             "max_width": payload.max_width,
-            "duration_seconds": payload.duration_seconds,
+            "duration_seconds": payload.duration_seconds or None,
+            "realtime_mode": True,
+            "record_output": False,
             "show_hud": payload.show_hud,
         },
     )
@@ -416,8 +429,9 @@ async def create_live_job(
         confidence=payload.confidence,
         line_position=payload.line_position,
         max_width=payload.max_width,
-        live_duration_seconds=payload.duration_seconds,
+        live_duration_seconds=payload.duration_seconds or None,
         show_hud=payload.show_hud,
+        realtime_mode=True,
     )
     return manager.get(job_id)
 
