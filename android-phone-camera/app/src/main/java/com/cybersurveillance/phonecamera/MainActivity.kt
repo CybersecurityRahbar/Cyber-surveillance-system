@@ -454,12 +454,10 @@ class MainActivity : ComponentActivity() {
         val nv21 = ByteArray(width * height * 3 / 2)
         var position = 0
         val yBuffer = yPlane.buffer.duplicate()
-        val yRow = ByteArray(yPlane.rowStride)
         for (row in 0 until height) {
-            yBuffer.position(row * yPlane.rowStride)
             if (yPlane.pixelStride == 1) {
-                yBuffer.get(yRow, 0, minOf(yPlane.rowStride, yRow.size))
-                System.arraycopy(yRow, 0, nv21, position, width)
+                yBuffer.position(row * yPlane.rowStride)
+                yBuffer.get(nv21, position, width)
                 position += width
             } else {
                 for (col in 0 until width) {
