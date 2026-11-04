@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from queue import Empty, Full, Queue
 from threading import Lock
 from time import monotonic
@@ -15,6 +16,17 @@ class LatestFrameBuffer:
         self._max_jpeg_bytes = max_jpeg_bytes
         self.received_frames = 0
         self.dropped_frames = 0
+        self._arrival_times: deque[float] = deque(maxlen=30)
+
+    @property
+    def received_fps(self) -> float:
+        """Estimate the recent camera-to-server arrival rate over the last 30 frames."""
+        with self._lock:
+            arrivals = tuple(self._arrival_times)
+        if len(arrivals) < 2:
+            return 0.0
+        interval = arrivals[-1] - arrivals[0]
+        return (len(arrivals) - 1) / interval if interval > 0 else 0.0
 
     @property
     def closed(self) -> bool:
@@ -30,7 +42,9 @@ class LatestFrameBuffer:
             if self._closed:
                 return False
             self.received_frames += 1
-            item = (bytes(payload), monotonic())
+            received_at = monotonic()
+            self._arrival_times.append(received_at)
+            item = (bytes(payload), received_at)
             try:
                 self._queue.put_nowait(item)
             except Full:
