@@ -282,13 +282,12 @@ class MainActivity : ComponentActivity() {
                 0,
                 if (fullscreen) 0f else 1f
             )
-            previewCard.layoutParams = LinearLayout.LayoutParams(
+            val previewParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                if (fullscreen) 0,
+                if (fullscreen) 0 else dp(250),
                 if (fullscreen) 1f else 0f
-            ).apply {
-                if (!fullscreen) height = dp(250)
-            }
+            )
+            previewCard.layoutParams = previewParams
         }
         previewCard.requestLayout()
         controlsScroll.requestLayout()
