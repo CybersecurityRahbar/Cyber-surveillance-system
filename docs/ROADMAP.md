@@ -72,10 +72,13 @@
 - review workflow لتقليل false positives.
 
 ## المرحلة 5 — تطبيق الهاتف وبوابة البث ثم Multi-camera orchestration
-- Android CameraX + MediaCodec H.264 + WebRTC/WHIP publisher.
-- MediaMTX كـ media gateway، ثم قراءة RTSP داخلياً في Python.
-- VPN/TLS ومصادقة نشر لكل stream، وعدم نشر منافذ الكاميرات للعامة.
-- بعدها إدارة عدة كاميرات ومزامنتها.
+**الحالة الحالية:** تطبيق Android MVP موجود ويعمل ببث WSS/JPEG أحادي الكاميرا. تم اختبار اتصال الهاتف فعلياً بخادم Colab، لكن معدل التحليل في اختبار المستخدم لم يحقق بعد سلاسة الرصد المطلوبة.
+
+- المنفذ حالياً: Android CameraX 640×360، تحويل YUV إلى JPEG، WSS مع X-API-Key، معاينة الهاتف، تخطيط Landscape/scroll/full-screen وأيقونة خاصة.
+- يستقبل Python الإطارات عبر LatestFrameBuffer محدود بإطار واحد، ويستبدل الإطار القديم بدلاً من بناء طابور متأخر.
+- المسار الحي يستخدم YOLO26n/ByteTrack بإعداد أقل كلفة، ويحدث هويات التتبع ومؤشرات التأخير أثناء الجلسة دون انتظار التقرير النهائي.
+- التالي: اختبار FPS الوارد من الهاتف مقابل FPS المعالجة وJPEG encode ms وinference latency وframe age على الهاتف وColab؛ لا يعتمد النظام حتى يحقق قياسات مستقرة على عتاد مستهدف.
+- تطوير لاحق: Android Foreground Service، H.264 hardware encoder، WebRTC/WHIP، MediaMTX وTURN، ثم إدارة عدة كاميرات ومزامنتها.
 - كاميرات RTSP/ONVIF/USB/ESP32 MJPEG وملفات.
 - process منفصل أو worker لكل stream.
 - health monitoring وreconnect/backoff.
@@ -117,3 +120,19 @@
 - benchmark لعدد الكاميرات وFPS وlatency وRAM/VRAM.
 - حماية الشبكة وصلاحيات المشغلين والخصوصية.
 - توثيق حدود كل ميزة قبل اعتمادها ميدانياً.
+
+
+## المرحلة 2.3 — الرصد الحي منخفض التأخير وهويات التتبع المباشرة (2026-11-04)
+**الحالة البرمجية:** تغييرات المحرك والواجهة واختبارات CI ناجحة؛ قياس الأداء الجديد على Colab وهاتف المستخدم لم يُنفذ بعد.
+
+- اعتماد LatestFrameBuffer سعة إطار واحد مع latest-frame-wins لمنع تراكم إطارات قديمة.
+- ملف Live منفصل عن تحليل الملفات: ByteTrack افتراضياً، YOLO26n imgsz=384، max_det=30، max_width=640، وإيقاف MP4 encode وسمات المركبات الثقيلة داخل حلقة الإطار.
+- بث snapshot للهويات النشطة إلى لوحة المهام لكل إطار محلل، مع TTL ثلاث ثوانٍ، وترتيب الأحدث أولاً.
+- تحديث جدول التتبع المباشر في المتصفح كل 350ms، وتحديث الأحداث كل 2.5 ثانية، وإبقاء التقرير النهائي في SQLite بعد الإيقاف.
+- إضافة telemetry: camera ingress FPS، processing FPS، inference latency، frame age، received frames، replaced/dropped frames، وعدد الهويات النشطة.
+- تطبيق Android: تحسين نسخ YUV وتحويل JPEG، وعرض FPS الرفع ومقاس الإطار ومتوسط encode ms والتخطي الشبكي/الزمني.
+- واجهة Deep Navy زرقاء، رادار 16:9 متناسق، أقسام Analytics/Events/Reports/Camera Setup مربوطة، Layout أفقي للهاتف وتمرير وملء الشاشة وأيقونة.
+- خط معايرة العد الحالي يحفظ موضع الخط محلياً فقط؛ لم تُنفذ بعد معايرة Homography المترية أو قياس سرعة موثوق.
+- Camera Wall الحالي يعرض مصدراً واحداً؛ لم تُنفذ بعد مصفوفة متعددة الكاميرات أو cross-camera identity.
+- سجل قياس المستخدم قبل هذه التغييرات: 111 إطاراً محللاً، 1.72 FPS، 99 إطاراً ساقطاً، 60.3 ثانية، و0.72×. هذا خط أساس للمقارنة وليس نتيجة بعد الإصلاح.
+- حد القبول التالي: تسجيل ingress FPS وprocessing FPS وp50/p95 inference latency وframe age في جلسة 3 دقائق على GPU معروف؛ مقارنة عد المركبات يدوياً، واختبار عدم تأخر الهويات في الجدول. لا ندعي 10 FPS أو أقل من ثانية قبل هذا القياس.
