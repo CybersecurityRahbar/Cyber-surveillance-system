@@ -583,12 +583,62 @@
     }
   }
 
+  async function loadEvents() {
+    try {
+      const response = await api("/api/v1/events?limit=30");
+      const events = await response.json();
+      const list = $("eventList");
+      list.innerHTML = "";
+      $("eventCount").textContent = events.length + " EVENTS";
+      if (!events.length) {
+        list.innerHTML = '<div class="empty-state">لا توجد أحداث مسجلة بعد.</div>';
+        return;
+      }
+      for (const item of events) {
+        const row = document.createElement("article");
+        row.className = "event-row";
+        const marker = document.createElement("span");
+        marker.className = "event-marker " + (item.severity || "info");
+        const details = document.createElement("div");
+        details.className = "event-details";
+        const title = document.createElement("b");
+        title.textContent = item.title || item.event_type || "حدث مروري";
+        const meta = document.createElement("small");
+        const occurred = item.occurred_at
+          ? new Date(item.occurred_at).toLocaleString()
+          : "وقت غير محدد";
+        meta.textContent = (item.camera_id || "كاميرا") + " · " + occurred;
+        details.append(title, meta);
+        const identity = document.createElement("span");
+        identity.className = "event-identity";
+        identity.textContent = item.track_id == null ? "—" : "#" + item.track_id;
+        row.append(marker, details, identity);
+        list.appendChild(row);
+      }
+    } catch (error) {
+      $("eventList").innerHTML =
+        '<div class="empty-state">تعذر تحميل الأحداث: ' + error.message + '</div>';
+    }
+  }
+
   async function loadCapabilities() {
     try {
       const response = await api("/api/v1/lab/capabilities");
       const info = await response.json();
+      const compute = info.compute || {};
+      if (compute.cuda_available) {
+        $("runtimeComputeStatus").textContent = "تسريع GPU متصل";
+        $("runtimeComputeDetail").textContent = compute.gpu_name || compute.device;
+        $("analysisRuntimeNote").textContent =
+          "ملف الرصد الحي: YOLO26n بحجم استدلال 384، ByteTrack، ودقة إدخال 640px. تم إيقاف ترميز MP4 أثناء البث لتقليل التأخير.";
+      } else {
+        $("runtimeComputeStatus").textContent = "المحرك يعمل على CPU";
+        $("runtimeComputeDetail").textContent = "لا يوجد CUDA GPU متاح";
+        $("analysisRuntimeNote").textContent =
+          "تنبيه أداء: هذا التشغيل لا يملك GPU. الرصد الحي سيعمل لكن قد لا يحقق معدل الإطارات المطلوب؛ فعّل GPU في إعدادات Colab ثم أعد تشغيل Runtime.";
+      }
       $("backendStatus").textContent = info.processing_ready
-        ? "محرك الكشف جاهز"
+        ? (compute.cuda_available ? "YOLO · GPU" : "YOLO · CPU")
         : "حزم ناقصة: " + info.missing_packages.join(", ");
       $("makeModelAvailability").textContent = info.pretrained_vehicle_attributes_enabled
         ? "نماذج اللون والماركة تُحمّل بعد معالجة الفيديو"
@@ -610,12 +660,21 @@
         setNotice("", false);
       }
       await loadSavedReports();
+      await loadEvents();
     } catch (error) {
       $("backendStatus").textContent = "أدخل مفتاح API";
       setNotice("أدخل مفتاح الجلسة الصحيح في الحقل العلوي لتفعيل واجهات التحليل.");
     }
   }
 
+  const savedCalibration = localStorage.getItem("trafficLabLinePosition");
+  if (savedCalibration && Number.isFinite(Number(savedCalibration))) {
+    $("linePosition").value = String(Math.max(10, Math.min(90, Number(savedCalibration))));
+    $("lineValue").textContent = $("linePosition").value + "%";
+    $("calibrationLinePosition").value = $("linePosition").value;
+    $("calibrationLineValue").textContent = $("linePosition").value + "%";
+    $("calibrationStatus").textContent = "تم تحميل موضع خط العد المحفوظ محلياً";
+  }
   $("apiKey").value = sessionStorage.getItem("trafficLabApiKey") || "";
   $("apiKey").addEventListener("change", () => {
     const key = $("apiKey").value.trim();
@@ -636,6 +695,24 @@
   $("startLive").addEventListener("click", startLiveJob);
   $("stopJob").addEventListener("click", stopJob);
   $("refreshReports").addEventListener("click", loadSavedReports);
+  $("refreshEvents").addEventListener("click", loadEvents);
+  $("calibrationLinePosition").addEventListener("input", () => {
+    $("calibrationLineValue").textContent = $("calibrationLinePosition").value + "%";
+  });
+  $("applyCalibration").addEventListener("click", () => {
+    const value = $("calibrationLinePosition").value;
+    $("linePosition").value = value;
+    $("lineValue").textContent = value + "%";
+    localStorage.setItem("trafficLabLinePosition", value);
+    $("calibrationStatus").textContent =
+      "تم حفظ موضع خط العد لهذا المتصفح؛ سيُستخدم في الجلسة التالية.";
+  });
+  document.querySelectorAll("[data-nav]").forEach((link) => {
+    link.addEventListener("click", () => {
+      document.querySelectorAll("[data-nav]").forEach((item) => item.classList.remove("active"));
+      link.classList.add("active");
+    });
+  });
   $("savedReportSelect").addEventListener("change", () => {
     const sessionId = $("savedReportSelect").value;
     if (sessionId) loadSavedReport(sessionId).catch((error) => setNotice(error.message));
@@ -669,9 +746,13 @@
   $("confidence").addEventListener("input", () =>
     $("confidenceValue").textContent = $("confidence").value + "%"
   );
-  $("linePosition").addEventListener("input", () =>
-    $("lineValue").textContent = $("linePosition").value + "%"
-  );
+  $("linePosition").addEventListener("input", () => {
+    $("lineValue").textContent = $("linePosition").value + "%";
+    if ($("calibrationLinePosition")) {
+      $("calibrationLinePosition").value = $("linePosition").value;
+      $("calibrationLineValue").textContent = $("linePosition").value + "%";
+    }
+  });
   $("videoFile").addEventListener("change", () => {
     const file = $("videoFile").files[0];
     if (!file) return;
